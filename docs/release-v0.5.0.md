@@ -10,4 +10,4 @@
 
 验证：78 项核心检查、设置迁移、原生计算设备与缩放、后台摄像头采集、便携运行时及证书绑定的深度签名检查通过。合成演示核验了提醒时间调整、四个设置页、居中主画面和紧凑画中画布局；不抢焦点及恢复/冷却流程通过自动检查。已安装到 Applications 并注册到 Spotlight。
 
-完整审查、动作映射、架构图与剩余限制见 [架构审查与监测能力](https://github.com/go1f/kukusit/blob/v0.5.0/docs/architecture-review-v0.5.md)。面向 Apple Silicon / macOS 14+，M2 / macOS 27 验证；未在 M5 实机验证。发行包仍包含本地推理运行时，无需安装 Python，无联网推理。
+完整审查、动作映射、架构图与剩余限制见 [架构审查与监测能力](https://github.com/go1f/kukuseat/blob/v0.5.0/docs/architecture-review-v0.5.md)。面向 Apple Silicon / macOS 14+，M2 / macOS 27 验证；未在 M5 实机验证。发行包仍包含本地推理运行时，无需安装 Python，无联网推理。

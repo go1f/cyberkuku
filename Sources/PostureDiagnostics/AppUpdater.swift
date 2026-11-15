@@ -335,7 +335,7 @@ struct AppUpdateSettingsView: View {
                 Text("发现新版本后可以立即更新、稍后提醒或跳过该版本。点击“下载安装更新”后无需再次确认，下载和校验通过即安装并重新启动。镜像选择、敏感度、校准和个人示范都会保留。")
                 Text("如果正从安装镜像中运行，请先把应用拖到“应用程序”。")
                     .font(.caption).foregroundStyle(.secondary)
-                Link("查看 GitHub 发布记录", destination: URL(string: "https://github.com/go1f/kukusit/releases")!)
+                Link("查看 GitHub 发布记录", destination: URL(string: "https://github.com/go1f/kukuseat/releases")!)
             }
         }.formStyle(.grouped)
     }

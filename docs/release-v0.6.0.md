@@ -10,4 +10,4 @@
 
 发行包包含本地推理运行时，无需 Python，无联网推理。个人参考与动作示范、照片和本机验证数据均不包含在发行包中。面向 Apple Silicon / macOS 14+，在 M2 / macOS 27 验证，未在 M5 实机验证。本地开发证书自签名，未进行 Apple Developer ID 公证。
 
-使用方法与能力边界见 [监测与采样说明](https://github.com/go1f/kukusit/blob/v0.6.0/docs/monitor-v0.6.md)。
+使用方法与能力边界见 [监测与采样说明](https://github.com/go1f/kukuseat/blob/v0.6.0/docs/monitor-v0.6.md)。

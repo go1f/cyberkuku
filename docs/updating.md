@@ -1,6 +1,6 @@
 # 检查与发布更新
 
-Kukusit 0.7.0 开始使用原生更新实现。固定入口为 `https://github.com/go1f/kukusit/releases/latest/download/update.json`，公开 GitHub Release 不需要令牌。不加载 Sparkle 或其他动态更新框架，保留原 Hardened Runtime 与动态库验证。
+Kukusit 0.7.0 开始使用原生更新实现。固定入口为 `https://github.com/go1f/kukuseat/releases/latest/download/update-v2.json`，公开 GitHub Release 不需要令牌。不加载 Sparkle 或其他动态更新框架，保留原 Hardened Runtime 与动态库验证。
 
 用户可在应用菜单和设置的“应用更新”页检查版本。默认每天自动检查一次，可关闭并保留选择；后台检查本身不会下载或安装。发现新版后，由用户点击一次“下载安装更新”，界面显示进度条、百分比及已下载／总大小。按钮旁明确说明会在下载和校验通过后自动安装、重新启动，无需再次确认。用户可在下载或校验阶段取消，失败时保留当前应用。
 
@@ -14,8 +14,8 @@ Kukusit 0.7.0 开始使用原生更新实现。固定入口为 `https://github.c
 
 1. 修改 `App/Info.plist` 显示版本和递增构建号，编写对应 `docs/release-vX.Y.Z.md`。
 2. 运行 `zsh scripts/build_release.sh` 和 `zsh scripts/create_dmg.sh`。
-3. 运行 `python3 scripts/build_update_manifest.py`。脚本在登录钥匙串中使用 Ed25519 私钥为 manifest 签名，生成 `release/update.json`。公开密钥在 Info.plist 的 `KukusitUpdatePublicKey` 中。
-4. 上传 ZIP、DMG、校验文件与 `update.json` 到对应 GitHub Release；完成上传和匿名下载校验之后，将 Release 标为 latest。不要用缺少 `update.json` 的发布替换 latest。
+3. 运行 `python3 scripts/build_update_manifest.py`。脚本在登录钥匙串中使用 Ed25519 私钥为 manifest 签名，生成 `release/update-v2.json` 与兼容旧版的 `release/update.json`。公开密钥在 Info.plist 的 `KukusitUpdatePublicKey` 中。
+4. 上传 ZIP、DMG、校验文件与 `update.json`、`update-v2.json` 到对应 GitHub Release；完成上传和匿名下载校验之后，将 Release 标为 latest。不要用缺少 `update.json` 的发布替换 latest。
 5. 用应用 `--update-manifest-check release/update.json release/Kukusit-X.Y.Z-macOS-arm64.zip` 校验真实签名与包内容，并测试从低构建号安装至新构建号。
 
 维护者的签名工具使用 Sparkle 2.10.0 官方 `sign_update`，仅在构建机运行，不包含在用户应用中。工具可放在 `.local/sparkle/bin/sign_update`；官方发布为 `https://github.com/sparkle-project/Sparkle/releases/download/2.10.0/Sparkle-2.10.0.tar.xz`。下载并在 `.local/sparkle` 解压后可用。首次需要系统钥匙串授权。新构建机需要安全迁移已有的钥匙串密钥；不要重新生成密钥替代已发布的公开密钥。
@@ -25,3 +25,9 @@ Kukusit 0.7.0 开始使用原生更新实现。固定入口为 `https://github.c
 ## 一次性迁移
 
 0.6.x 尚无更新器，需手动安装 0.7.0 一次。以后通过应用内检查与安装。自签名发布没有 Apple 公证，首次下载仍由 macOS 管理安全确认。
+
+## 仓库改名兼容（0.12.4 起）
+
+新仓库为 `go1f/kukuseat`。新版读取新仓库的 `update-v2.json`，其安装包 URL 使用新路径。
+每次发布还须上传 `update.json`：同一安装包、相同签名密钥，但 payload 保留 `go1f/kukusit` 下载路径，以满足 0.12.3 及更旧版的精确地址校验，下载由 GitHub 重定向到新仓库。即使跳过过渡版也可升级。不要重新占用旧仓库名，否则 GitHub 的旧入口重定向会失效。签名校验仍严格限制两个明确的仓库路径，不接受其他仓库或任意 URL。
+安装包文件名和 ZIP 内 `Kukusit.app` 保留兼容命名，应用标识、证书及配置目录不变。

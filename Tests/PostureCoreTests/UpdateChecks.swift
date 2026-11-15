@@ -12,6 +12,8 @@ struct UpdateChecks {
         return try JSONEncoder().encode(SignedUpdateEnvelope(payload: payload.base64EncodedString(), signature: key.signature(for: payload).base64EncodedString()))
     }
     func validSignature() throws {
+        let canonical = item(url: "https://github.com/go1f/kukuseat/releases/download/v0.7.0/Kukusit-0.7.0-macOS-arm64.zip")
+        expectEqual(try UpdateManifest.verified(signed(canonical), publicKey: key.publicKey.rawRepresentation), canonical)
         let value = item(); let result = try UpdateManifest.verified(signed(value), publicKey: key.publicKey.rawRepresentation)
         expectEqual(result, value)
         expectTrue(result.supports(os: .init(majorVersion: 27, minorVersion: 0, patchVersion: 0)))
@@ -24,7 +26,7 @@ struct UpdateChecks {
         expectThrowsError(try UpdateManifest.verified(signed(item()), publicKey: Curve25519.Signing.PrivateKey().publicKey.rawRepresentation)) { _ in }
     }
     func constraints() throws {
-        for invalid in [item(url: "http://github.com/file.zip"), item(url: "https://github.com/other/repo/file.zip"), item(build: 0), item(size: 400_000_001)] {
+        for invalid in [item(url: "http://github.com/file.zip"), item(url: "https://github.com/other/repo/file.zip"), item(url: "https://github.com/go1f/kukuseat-evil/releases/download/v0.7.0/Kukusit-0.7.0-macOS-arm64.zip"), item(url: "https://github.com/go1f/kukuseat/releases/download/v0.7.1/Kukusit-0.7.0-macOS-arm64.zip"), item(build: 0), item(size: 400_000_001)] {
             expectThrowsError(try UpdateManifest.verified(signed(invalid), publicKey: key.publicKey.rawRepresentation)) { _ in }
         }
         expectThrowsError(try UpdateManifest.verified(Data(repeating: 0, count: 100_001), publicKey: key.publicKey.rawRepresentation)) { _ in }

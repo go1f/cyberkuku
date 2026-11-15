@@ -29,7 +29,9 @@ public struct UpdateManifest: Codable, Equatable {
               item.minimumOS.range(of: #"^\d+\.\d+(\.\d+)?$"#, options: .regularExpression) != nil,
               item.sha256.range(of: #"^[a-f0-9]{64}$"#, options: .regularExpression) != nil,
               item.size > 0, item.size <= 400_000_000, item.notes.count <= 20_000,
-              item.url == "https://github.com/go1f/kukusit/releases/download/v\(item.version)/Kukusit-\(item.version)-macOS-arm64.zip"
+              ["kukuseat", "kukusit"].contains(where: { repository in
+                  item.url == "https://github.com/go1f/\(repository)/releases/download/v\(item.version)/Kukusit-\(item.version)-macOS-arm64.zip"
+              })
         else { throw UpdateFailure.invalidManifest }
         return item
     }
