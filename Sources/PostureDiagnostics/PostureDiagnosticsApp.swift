@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !args.contains("--background-check") { desktop.showMain(expandPreview: true) }
         if !demo, !args.contains("--layout-check"), model.settings.resumeOnLaunch, !model.profiles.isEmpty,
            AVCaptureDevice.authorizationStatus(for: .video) == .authorized { model.start() }
+        if args.contains("--show-companion") { desktop.showPet() }
         if args.contains("--ui-smoke") { runSmoke(model: model, desktop: desktop) }
         if args.contains("--banner-review"), demo {
             model.onReminderAlertsChanged = nil
@@ -139,6 +140,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 enum PostureDiagnosticsApp {
     @MainActor static func main() {
+        if CommandLine.arguments.contains("--fullscreen-edge-live-check") { DesktopPetController.liveFullScreenEdgeCheck(); return }
+        if let index = CommandLine.arguments.firstIndex(of:"--pet-edge-render"), CommandLine.arguments.count > index+1 {
+            do { try DesktopPetChecks.renderEdges(directory:CommandLine.arguments[index+1]) } catch { fputs("Edge render failed: \(error)\n",stderr); exit(1) }; return
+        }
+        if CommandLine.arguments.contains("--window-interaction-check") { WindowInteractionChecks.run(); return }
         if let index = CommandLine.arguments.firstIndex(of: "--pet-render"), CommandLine.arguments.count > index+1 {
             DesktopPetChecks.run(directory: CommandLine.arguments[index+1]); return
         }

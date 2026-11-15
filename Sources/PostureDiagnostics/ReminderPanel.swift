@@ -110,7 +110,9 @@ private struct BannerView: View {
 }
 
 @MainActor final class ReminderPanelController {
-    private let pet = DesktopPetController()
+    var onOpenMonitor: () -> Void = {}
+    var onPetVisibilityChanged: () -> Void = {}
+    private let pet: DesktopPetController
     private let panel: PassivePanel
     private let content = BannerContent()
     private let router: DisplayRouter
@@ -142,6 +144,7 @@ private struct BannerView: View {
 
     init(router: DisplayRouter, now: @escaping () -> Double = { ProcessInfo.processInfo.systemUptime }, presentsOnScreen: Bool = true) {
         self.router = router; self.now = now; self.presentsOnScreen = presentsOnScreen
+        self.pet = DesktopPetController(presentsOnScreen:presentsOnScreen)
         panel = PassivePanel(contentRect: NSRect(x: 0, y: 0, width: 180, height: 40),
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false; panel.isOpaque = false
@@ -150,6 +153,8 @@ private struct BannerView: View {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         content.dismiss = { [weak self] in self?.dismissByUser() }
         pet.onDismiss = { [weak self] in self?.dismissByUser() }
+        pet.onOpenMonitor = { [weak self] in self?.onOpenMonitor() }
+        pet.onVisibilityChanged = { [weak self] in self?.onPetVisibilityChanged() }
         let host = BannerHostingView(rootView: BannerView(content: content))
         host.sizingOptions = []
         host.wantsLayer = true; host.layer?.cornerRadius = BannerLayout.radius; host.layer?.masksToBounds = true
@@ -310,6 +315,8 @@ private struct BannerView: View {
         NSAnimationContext.runAnimationGroup({ context in context.duration = 0.25; panel.animator().alphaValue = 0 },
             completionHandler: { [weak self] in MainActor.assumeIsolated { if self?.token == current { self?.panel.orderOut(nil) } } })
     }
+    var petMenuPresentation: PetMenuPresentation { pet.menuPresentation }
+    func showPet() { pet.showByUser() }
     func togglePet() { pet.toggleVisibility() }
     func shutdown() { hide(); pet.shutdown() }
     func showReviewWindow() {

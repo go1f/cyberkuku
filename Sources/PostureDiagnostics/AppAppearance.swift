@@ -1,7 +1,6 @@
 import AppKit
 
-/// The running application's Dock icon follows the system appearance. Finder and
-/// Launch Services continue to use the supplied light artwork in the ICNS.
+/// The reviewed Dock icon keeps its white tile. Status-item tinting is owned by AppKit.
 @MainActor
 final class AppAppearance {
     private var observation: NSKeyValueObservation?
@@ -27,6 +26,18 @@ final class AppAppearance {
         appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
     }
 
+    static func statusIcon(source: NSImage) -> NSImage {
+        let image = NSImage(size:NSSize(width:22,height:22),flipped:false) { rect in
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            context.saveGState(); defer { context.restoreGState() }
+            context.translateBy(x:rect.width,y:0); context.scaleBy(x:-1,y:1)
+            source.draw(in:rect,from:.zero,operation:.sourceOver,fraction:1)
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "KukuSeat 坐姿监测"
+        return image
+    }
     private func icon(named name: String) -> NSImage? {
         guard let url = Bundle.main.url(forResource: name, withExtension: "icns") else { return nil }
         return NSImage(contentsOf: url)

@@ -8,7 +8,13 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
     let model: DiagnosticModel
     let updater: AppUpdater
     let router = DisplayRouter()
-    lazy var reminders = ReminderPanelController(router: router)
+    lazy var reminders: ReminderPanelController = {
+        let offscreen = CommandLine.arguments.contains("--window-interaction-check") || CommandLine.arguments.contains("--presentation-check")
+        let controller = ReminderPanelController(router: router,presentsOnScreen:!offscreen)
+        controller.onOpenMonitor = { [weak self] in self?.openMain() }
+        controller.onPetVisibilityChanged = { [weak self] in self?.statusPanel.updateGeometry() }
+        return controller
+    }()
     @Published private(set) var pipVisible = false
     private var mainVisible = false
     private var mainWindow: NSWindow?
@@ -30,11 +36,8 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
         super.init()
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem = item
-        let statusImage = Bundle.main.url(forResource: "StatusIcon", withExtension: "png").flatMap(NSImage.init(contentsOf:))
-        statusImage?.size = NSSize(width: 22, height: 22)
-        statusImage?.isTemplate = false
-        statusImage?.accessibilityDescription = "KukuSeat 坐姿监测"
-        item.button?.image = statusImage
+        let source = Bundle.main.url(forResource:"StatusIcon",withExtension:"png").flatMap(NSImage.init(contentsOf:))
+        item.button?.image = source.map { AppAppearance.statusIcon(source:$0) }
         statusPanel.attach(to: item)
         item.button?.toolTip = "坐姿监测 · 点击查看状态，⌥点击切换画中画"
         statusClickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
@@ -138,6 +141,7 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
         model.previewExpanded = true
         updateRendering()
         NSApplication.shared.activate(ignoringOtherApps: true)
+        if mainWindow?.isMiniaturized == true { mainWindow?.deminiaturize(nil) }
         mainWindow?.makeKeyAndOrderFront(nil)
     }
     func hideMain() {
@@ -241,7 +245,9 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
         model.setRendering(image: full || (pipVisible && model.settings.pipShowsVideo),
                            skeleton: full || (pipVisible && model.settings.pipShowsSkeleton))
     }
-    @objc func togglePet() { reminders.togglePet() }
+    var petMenuPresentation: PetMenuPresentation { reminders.petMenuPresentation }
+    func showPet() { reminders.showPet(); statusPanel.updateGeometry() }
+    @objc func togglePet() { reminders.togglePet(); statusPanel.updateGeometry() }
     func previewReminder() { reminders.preview() }
     func shutdown() {
         flushPiPPlacement(); placementWork?.cancel()
@@ -270,6 +276,12 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "退出 KukuSeat", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         appItem.submenu = menu; root.addItem(appItem)
+        let fileItem = NSMenuItem(title: "文件", action: nil, keyEquivalent: "")
+        let file = NSMenu(title: "文件")
+        let close = NSMenuItem(title: "关闭窗口", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        close.keyEquivalentModifierMask = [.command]
+        // A nil target uses AppKit's responder chain and closes the current window.
+        file.addItem(close); fileItem.submenu = file; root.addItem(fileItem)
         let editItem = NSMenuItem(title: "编辑", action: nil, keyEquivalent: "")
         let edit = NSMenu(title: "编辑")
         edit.addItem(NSMenuItem(title: "剪切", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))

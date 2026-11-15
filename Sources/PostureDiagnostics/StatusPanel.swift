@@ -29,6 +29,8 @@ private final class StatusHeaderHostingView: NSHostingView<StatusMenuHeader> {
     private let model: DiagnosticModel
     private unowned let desktop: DesktopCoordinator
     private weak var statusItem: NSStatusItem?
+    private let pet = NSMenuItem(title:"显示小灰猫",action:nil,keyEquivalent:"")
+    private let petStatus = NSMenuItem(title:"小灰猫：已隐藏",action:nil,keyEquivalent:"")
     private let monitor = NSMenuItem(title: "开始监测", action: nil, keyEquivalent: "")
     private let pip = NSMenuItem(title: "画中画", action: nil, keyEquivalent: "")
     private let mirror = NSMenuItem(title: "镜像预览", action: nil, keyEquivalent: "")
@@ -46,8 +48,8 @@ private final class StatusHeaderHostingView: NSHostingView<StatusMenuHeader> {
         header.view = host; menu.addItem(header); menu.addItem(.separator())
         let open = NSMenuItem(title: "打开监测窗口", action: #selector(DesktopCoordinator.openMain), keyEquivalent: "")
         open.target = desktop; menu.addItem(open)
-        let pet = NSMenuItem(title: "显示／隐藏小灰猫", action: #selector(DesktopCoordinator.togglePet), keyEquivalent: "")
-        pet.target = desktop; menu.addItem(pet)
+        pet.action = #selector(DesktopCoordinator.togglePet); pet.target = desktop; menu.addItem(pet)
+        petStatus.isEnabled = false; menu.addItem(petStatus)
         pip.target = self; pip.action = #selector(togglePiP); menu.addItem(pip)
         monitor.target = self; monitor.action = #selector(toggleMonitoring); menu.addItem(monitor)
         mirror.target = self; mirror.action = #selector(toggleMirror); menu.addItem(mirror)
@@ -78,6 +80,9 @@ private final class StatusHeaderHostingView: NSHostingView<StatusMenuHeader> {
         button.performClick(nil)
     }
     func updateGeometry() {
+        let state = desktop.petMenuPresentation
+        pet.title = state.action; pet.state = state.check
+        petStatus.attributedTitle = NSAttributedString(string:state.detail,attributes:[.font:NSFont.menuFont(ofSize:11),.foregroundColor:NSColor.secondaryLabelColor])
         monitor.title = model.hasStarted ? "暂停监测" : "开始监测"
         pip.state = desktop.pipVisible ? .on : .off
         mirror.state = model.mirrored ? .on : .off
@@ -113,6 +118,7 @@ private final class StatusHeaderHostingView: NSHostingView<StatusMenuHeader> {
          "headerHeight": menu.items.first?.view?.frame.height ?? 0,
          "width": menu.size.width, "height": menu.size.height,
          "itemTitles": menu.items.filter { !$0.isSeparatorItem && $0.view == nil }.map(\.title),
+         "petActionTitle":pet.title,"petState":pet.state.rawValue,"petDetail":petStatus.attributedTitle?.string ?? "",
          "mirrored": mirror.state == .on]
     }
 }

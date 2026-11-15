@@ -1,7 +1,6 @@
 import AppKit
 
-// Preserve the supplied artwork. The static Finder icon stays transparent;
-// AppKit selects the light/dark rounded backgrounds for the running Dock icon.
+// Preserve the original artwork and clip its opaque paper background to the Dock tile.
 let arguments = CommandLine.arguments
 guard (3...4).contains(arguments.count),
       let source = NSImage(contentsOfFile: arguments[1]) else {
@@ -23,14 +22,21 @@ for points in [16, 32, 128, 256, 512] {
         context.imageInterpolation = .high
         let canvas = NSRect(x: 0, y: 0, width: pixels, height: pixels)
         context.cgContext.clear(canvas)
+        // Mirror the reviewed character and its chair; the centred tile keeps its geometry.
+        context.cgContext.translateBy(x:CGFloat(pixels),y:0)
+        context.cgContext.scaleBy(x:-1,y:1)
         let contentRect: NSRect
+        NSGraphicsContext.saveGraphicsState()
         if background == "transparent" {
             contentRect = canvas
         } else {
-            let inset = CGFloat(pixels) * 0.06
+            // Match the ~80% opaque tile width of neighbouring Dock icons.
+            let inset = CGFloat(pixels) * 0.10
             let tile = canvas.insetBy(dx: inset, dy: inset)
             (background == "dark" ? NSColor.black : NSColor.white).setFill()
-            NSBezierPath(roundedRect: tile, xRadius: tile.width * 0.225, yRadius: tile.height * 0.225).fill()
+            let outline = NSBezierPath(roundedRect: tile, xRadius: tile.width * 0.225, yRadius: tile.height * 0.225)
+            outline.fill()
+            outline.addClip() // The raster's white corners must never escape the rounded tile.
             contentRect = tile.insetBy(dx: tile.width * 0.03, dy: tile.height * 0.03)
         }
         let ratio = min(contentRect.width / source.size.width, contentRect.height / source.size.height)
@@ -53,6 +59,7 @@ for points in [16, 32, 128, 256, 512] {
             context.cgContext.fill(rect)
             context.cgContext.restoreGState()
         }
+        NSGraphicsContext.restoreGraphicsState()
         NSGraphicsContext.restoreGraphicsState()
         let suffix = scale == 2 ? "@2x" : ""
         let file = output.appendingPathComponent("icon_\(points)x\(points)\(suffix).png")
