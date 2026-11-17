@@ -1,25 +1,33 @@
 import AppKit
-import PostureCore
+import Darwin
 
 @MainActor enum PetFullscreenMonitor {
     static func displayID(_ screen: NSScreen) -> CGDirectDisplayID {
         (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? CGMainDisplayID()
     }
-    /// Read window geometry only, never titles or screen pixels, and never request AX access.
+    // SkyLight's read-only Space metadata is undocumented. Resolve optionally and fail open:
+    // never substitute window geometry (zoomed windows are not native full-screen Spaces).
+    private static let library = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY | RTLD_LOCAL)
+    private typealias Connection = @convention(c) () -> UInt32
+    private typealias Spaces = @convention(c) (UInt32) -> Unmanaged<CFArray>?
+    static func fullScreenIdentifiers(_ entries: [[String:Any]]) -> Set<String> {
+        Set(entries.compactMap { entry in
+            guard let current = entry["Current Space"] as? [String:Any],
+                  (current["type"] as? NSNumber)?.intValue == 4 else { return nil }
+            return entry["Display Identifier"] as? String
+        })
+    }
     static func coveredDisplays() -> Set<CGDirectDisplayID> {
-        guard let primary = NSScreen.screens.first,
-              let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly,.excludeDesktopElements],kCGNullWindowID) as? [[String:Any]] else { return [] }
-        var result: Set<CGDirectDisplayID> = []
-        for entry in windows {
-            guard (entry[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
-                  (entry[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1 > 0.9,
-                  let dict = entry[kCGWindowBounds as String] as? [String:Any],
-                  let raw = CGRect(dictionaryRepresentation:dict as CFDictionary) else { continue }
-            let frame = CGRect(x:raw.minX,y:primary.frame.maxY-raw.maxY,width:raw.width,height:raw.height)
-            for screen in NSScreen.screens where PetEdgeBehavior.coversDisplay(window:frame,screen:screen.frame,safeTop:screen.safeAreaInsets.top) {
-                result.insert(displayID(screen))
-            }
-        }
-        return result
+        guard let library, let connectionSymbol = dlsym(library,"CGSMainConnectionID"),
+              let spacesSymbol = dlsym(library,"CGSCopyManagedDisplaySpaces") else { return [] }
+        let connection = unsafeBitCast(connectionSymbol,to:Connection.self)
+        let spaces = unsafeBitCast(spacesSymbol,to:Spaces.self)
+        guard let values = spaces(connection())?.takeRetainedValue() as? [[String:Any]] else { return [] }
+        let identifiers = fullScreenIdentifiers(values)
+        return Set(NSScreen.screens.compactMap { screen in
+            let id = displayID(screen)
+            guard let uuid = CGDisplayCreateUUIDFromDisplayID(id)?.takeRetainedValue() else { return nil }
+            return identifiers.contains(CFUUIDCreateString(nil,uuid) as String) ? id : nil
+        })
     }
 }

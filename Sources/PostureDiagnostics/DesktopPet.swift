@@ -36,6 +36,7 @@ struct PetMenuPresentation: Equatable {
         let target: CGRect
         let generation: Int
     }
+    private var fullScreenPinned = false
     private var fullScreenReturn: FullScreenReturn?
     private var edgeTravel: EdgeTravel?
     private var fullScreenGeneration = 0
@@ -70,7 +71,7 @@ struct PetMenuPresentation: Equatable {
         configure(cat); cat.title = "KukuSeat 小灰猫"
         catView = CatCompanionView(frame:NSRect(origin:.zero,size:cat.frame.size))
         catView.onClick = { [weak self] in
-            guard let self, !self.suppressed else { return }
+            guard let self else { return }
             if self.hoverPeeking || self.peekReturning { self.pinHoverPeek() }
             else if self.behavior.edge != nil { self.unfold() }
             else { self.onDismiss() }
@@ -144,7 +145,7 @@ struct PetMenuPresentation: Equatable {
         if hidden { return PetMenuPresentation(action:"显示小灰猫",detail:"小灰猫：已隐藏",check:.off,canHide:false) }
         if !sessionBlockers.isEmpty { return PetMenuPresentation(action:"显示小灰猫",detail:"小灰猫：系统中断，暂时隐藏",check:.mixed,canHide:false) }
         if !wantsVisible { return PetMenuPresentation(action:"显示小灰猫",detail:"小灰猫：未显示",check:.off,canHide:false) }
-        if suppressed { return PetMenuPresentation(action:"显示小灰猫",detail:"小灰猫：全屏中，已自动收纳",check:.mixed,canHide:false) }
+        if suppressed && !fullScreenPinned { return PetMenuPresentation(action:"显示小灰猫",detail:"小灰猫：全屏中，已自动收纳",check:.mixed,canHide:false) }
         if hoverPeeking || peekReturning { return PetMenuPresentation(action:"固定小灰猫",detail:"小灰猫：临时探出，点击固定",check:.mixed,canHide:false) }
         if let edge = behavior.edge { return PetMenuPresentation(action:"展开小灰猫",detail:"小灰猫：已收纳在"+(edge == .left ? "左侧" : "右侧"),check:.mixed,canHide:false) }
         if presentsOnScreen && (!cat.isVisible || !cat.isOnActiveSpace) { return PetMenuPresentation(action:"显示小灰猫",detail:"小灰猫：当前桌面未显示",check:.off,canHide:false) }
@@ -206,8 +207,8 @@ struct PetMenuPresentation: Equatable {
         guard allowsDisplay, let screen = screenForCat() else { return }
         let value = displayCoverage().contains(PetFullscreenMonitor.displayID(screen))
         applySuppression(value)
-        if reduced { if suppressed { settleFullScreenCompact() } else { catView.finishAnimations() } }
-        if !suppressed { catView.synchronizePointer() }
+        if reduced { if suppressed && !fullScreenPinned && !hoverPeeking && !peekReturning { settleFullScreenCompact() } else { catView.finishAnimations() } }
+        if !suppressed || fullScreenPinned || hoverPeeking { catView.synchronizePointer() }
         updateRotation(); ensureTimer(); publishState()
     }
     private func applySuppression(_ value: Bool) {
@@ -220,7 +221,7 @@ struct PetMenuPresentation: Equatable {
         guard let screen = screenForCat() else { return }
         cancelHoverPeek(); cancelInteractions(); catView.finishAnimations()
         fullScreenReturn = FullScreenReturn(frame:cat.frame,expanded:expandedFrame,anchor:foldedAnchor,behavior:behavior,display:PetFullscreenMonitor.displayID(screen))
-        suppressed = true; fullScreenGeneration += 1; clearBubbleWindows()
+        suppressed = true; fullScreenPinned = false; fullScreenGeneration += 1; clearBubbleWindows()
         cat.collectionBehavior = [.canJoinAllSpaces,.fullScreenAuxiliary,.ignoresCycle]
         catView.fullScreenCompact = true; catView.breathes = false
         let side = behavior.edge ?? PetEdgeBehavior.nearestEdge(cat.frame,area:screen.frame)
@@ -256,7 +257,10 @@ struct PetMenuPresentation: Equatable {
         cat.setFrame(target,display:false); catView.setFolded(side,pose:behavior.pose,animated:false)
     }
     private func restoreAfterFullScreen(animated: Bool,show: Bool) {
-        guard let saved = fullScreenReturn else { suppressed = false; return }
+        guard var saved = fullScreenReturn else { suppressed = false; return }
+        let wasPinned = fullScreenPinned
+        if fullScreenPinned { saved = FullScreenReturn(frame:cat.frame,expanded:expandedFrame,anchor:foldedAnchor,behavior:behavior,display:saved.display) }
+        cancelHoverPeek(); fullScreenPinned = false
         fullScreenGeneration += 1; edgeTravel = nil; catView.finishAnimations()
         let side = automaticEdge
         fullScreenReturn = nil; automaticEdge = nil; suppressed = false
@@ -275,6 +279,7 @@ struct PetMenuPresentation: Equatable {
             catView.face(behavior.mirrored,animated:false)
         }
         peekArmed = false
+        if wasPinned, let screen { savePlacement(screen:screen) }
         if show && allowsDisplay { showCat(); catView.synchronizePointer() }
         updateRotation(); ensureTimer()
     }
@@ -284,7 +289,7 @@ struct PetMenuPresentation: Equatable {
     }
     private func ensureTimer() {
         ensureProximityTimer()
-        guard allowsDisplay && (suppressed ? (edgeTravel != nil || catView.isAnimating) : (enabled || catView.isAnimating)) else { timer?.invalidate(); timer = nil; return }
+        guard allowsDisplay && (suppressed && !fullScreenPinned ? (edgeTravel != nil || catView.isAnimating) : (enabled || catView.isAnimating)) else { timer?.invalidate(); timer = nil; return }
         let rate = catView.isAnimating || edgeTravel != nil ? 60.0 : 15.0
         guard timer == nil || timerRate != rate else { return }
         timer?.invalidate(); timerRate = rate
@@ -307,7 +312,7 @@ struct PetMenuPresentation: Equatable {
     }
     func present(_ alerts: [MonitoringAlert],text: String) {
         lastMessages = alerts; lastText = text; lastPresentation = ProcessInfo.processInfo.systemUptime
-        guard enabled && allowsDisplay && !suppressed && behavior.edge == nil && !dragging else { clearBubbleWindows(); return }
+        guard enabled && allowsDisplay && (!suppressed || fullScreenPinned) && behavior.edge == nil && !dragging else { clearBubbleWindows(); return }
         let items: [(String,String,Bool,Bool)] = alerts.isEmpty ? (text.isEmpty ? [] : [("nudge",text,false,false)]) : alerts.map { ($0.id,$0.message,$0.recovering,$0.resolved) }
         let ids = Set(items.map { $0.0 })
         for id in order where !ids.contains(id) { bubbles[id]?.0.orderOut(nil); bubbles[id] = nil }
@@ -319,7 +324,9 @@ struct PetMenuPresentation: Equatable {
                 let view = ComicBubbleView(message:message,delay:Double(added)*0.65)
                 view.update(message:message,recovering:recovering,resolved:resolved)
                 let panel = PassivePanel(contentRect:NSRect(origin:.zero,size:view.frame.size),styleMask:[.borderless,.nonactivatingPanel],backing:.buffered,defer:false)
-                configure(panel); panel.contentView = view; view.onClick = { [weak self] in self?.onDismiss() }
+                configure(panel)
+                if suppressed { panel.collectionBehavior = [.canJoinAllSpaces,.fullScreenAuxiliary,.ignoresCycle] }
+                panel.contentView = view; view.onClick = { [weak self] in self?.onDismiss() }
                 bubbles[id] = (panel,view); order.append(id); added += 1
             }
         }
@@ -346,7 +353,7 @@ struct PetMenuPresentation: Equatable {
     }
     private func shutdownWindows() {
         cancelHoverPeek(); cancelInteractions(); catView.finishAnimations()
-        if suppressed { settleFullScreenCompact() }
+        if suppressed && !fullScreenPinned && !hoverPeeking && !peekReturning { settleFullScreenCompact() }
         timer?.invalidate(); timer = nil; environmentTimer?.invalidate(); environmentTimer = nil; proximityTimer?.invalidate(); proximityTimer = nil
         cat.orderOut(nil); clearBubbleWindows(); updateRotation()
     }
@@ -402,6 +409,7 @@ struct PetMenuPresentation: Equatable {
         if hoverPeeking || peekReturning { pinHoverPeek(); return }
         guard let side = behavior.edge, let screen = screenForCat() else { return }
         let centerY = cat.frame.midY
+        if suppressed { fullScreenPinned = true; catView.fullScreenCompact = false; catView.breathes = enabled }
         behavior.unfold(); foldedAnchor = nil
         manuallyShown = true; defaults.set(true,forKey:"desktopPet.manuallyShown")
         let area = screen.visibleFrame.insetBy(dx:8,dy:8)
@@ -414,7 +422,7 @@ struct PetMenuPresentation: Equatable {
         ensureTimer()
     }
     private func move(_ point: NSPoint,finished: Bool) {
-        guard !suppressed else { return }
+        guard !suppressed || fullScreenPinned || hoverPeeking || peekReturning else { return }
         if !dragging {
             guard !finished else { return }
             if hoverPeeking || peekReturning { pinHoverPeek() }
@@ -447,7 +455,7 @@ struct PetMenuPresentation: Equatable {
         layout()
     }
     private func ensureProximityTimer() {
-        guard allowsDisplay && !suppressed && behavior.edge != nil else {
+        guard allowsDisplay && behavior.edge != nil && edgeTravel == nil else {
             proximityTimer?.invalidate(); proximityTimer = nil; return
         }
         guard proximityTimer == nil else { return }
@@ -457,7 +465,7 @@ struct PetMenuPresentation: Equatable {
         if let proximityTimer { RunLoop.main.add(proximityTimer,forMode:.common) }
     }
     private func sampleProximity(_ point: CGPoint,at now: Double) {
-        guard allowsDisplay && !suppressed && behavior.edge != nil && !dragging, let anchor = foldedAnchor else { return }
+        guard allowsDisplay && behavior.edge != nil && edgeTravel == nil && !dragging, let anchor = foldedAnchor else { return }
         let nearEntry = anchor.insetBy(dx:-12,dy:-10).contains(point)
         if !peekArmed { if !nearEntry { peekArmed = true }; return }
         if hoverPeeking || peekReturning {
@@ -481,6 +489,7 @@ struct PetMenuPresentation: Equatable {
         let area = screen.visibleFrame.insetBy(dx:8,dy:8)
         let frame = PetPlacement.clamp(CGRect(x:side == .left ? area.minX+10 : area.maxX-PetPlacement.companionSize.width-10,
             y:anchor.midY-PetPlacement.companionSize.height/2,width:PetPlacement.companionSize.width,height:PetPlacement.companionSize.height),to:area)
+        catView.fullScreenCompact = false
         cat.setFrame(frame,display:true); catView.setExpanded(from:side,animated:!reduced)
         updateFacing(screen:screen); updateRotation(); ensureTimer(); publishState()
     }
@@ -491,6 +500,7 @@ struct PetMenuPresentation: Equatable {
         let arrive: () -> Void = { [weak self] in
             guard let self, self.peekGeneration == generation else { return }
             self.peekReturning = false; self.peekLeaveAt = nil
+            self.catView.fullScreenCompact = self.suppressed
             self.cat.setFrame(anchor,display:true)
             self.catView.setFolded(side,pose:self.behavior.pose,animated:!self.reduced && self.allowsDisplay && !self.suppressed)
             self.updateRotation(); self.ensureTimer(); self.publishState()
@@ -502,6 +512,7 @@ struct PetMenuPresentation: Equatable {
         peekGeneration += 1; hoverPeeking = false; peekReturning = false; peekLeaveAt = nil
         catView.finishAnimations()
         if let side = behavior.edge, let anchor = foldedAnchor {
+            catView.fullScreenCompact = suppressed
             cat.setFrame(anchor,display:false); catView.setFolded(side,pose:behavior.pose,animated:false)
         }
     }
@@ -509,6 +520,7 @@ struct PetMenuPresentation: Equatable {
         guard hoverPeeking || peekReturning, behavior.edge != nil, let screen = screenForCat() else { return }
         peekGeneration += 1; hoverPeeking = false; peekReturning = false; peekLeaveAt = nil
         catView.resumeRetreat(); behavior.unfold(); foldedAnchor = nil
+        if suppressed { fullScreenPinned = true; catView.fullScreenCompact = false; catView.breathes = enabled }
         manuallyShown = true; hidden = false
         defaults.set(true,forKey:"desktopPet.manuallyShown"); defaults.set(false,forKey:"desktopPet.hidden")
         expandedFrame = cat.frame; savePlacement(screen:screen)
@@ -678,7 +690,7 @@ private final class CatCompanionView: NSView {
     }
     @objc private func hidePet() { onHide() }
     private func updateHelp() {
-        if fullScreenCompact { toolTip = "全屏期间自动收纳，退出后恢复；双击打开监控窗口"; return }
+        if fullScreenCompact { toolTip = "靠近探出，单击展开固定；双击打开监控窗口"; return }
         toolTip = folded == nil ? "单击安静 30 秒；双击打开监控窗口；拖到左右边缘收纳" : "单击展开；双击打开监控窗口；可拖回桌面" }
     func face(_ mirrored: Bool,animated: Bool) {
         desiredFacing = mirrored
@@ -1088,11 +1100,13 @@ extension DesktopPetController {
             c.applySuppression(true); c.settleFullScreenCompact(); c.ensureTimer()
             precondition(c.automaticEdge == side && c.cat.frame.size == CGSize(width:44,height:44))
             precondition(c.cat.collectionBehavior.contains(.fullScreenAuxiliary) && c.catView.fullScreenCompact)
-            precondition(c.proximityTimer == nil && c.timer == nil)
+            precondition(c.proximityTimer != nil && c.timer == nil)
             precondition(c.menuPresentation.detail.contains("自动收纳"))
             let anchor = c.cat.frame
-            c.sampleProximity(CGPoint(x:anchor.midX,y:anchor.midY),at:0); c.catView.onClick()
-            precondition(!c.hoverPeeking && muted == 0)
+            c.sampleProximity(CGPoint(x:anchor.midX+200,y:anchor.midY),at:0)
+            c.sampleProximity(CGPoint(x:anchor.midX,y:anchor.midY),at:1)
+            precondition(c.hoverPeeking && !c.catView.fullScreenCompact && muted == 0)
+            c.cancelHoverPeek()
             precondition(prefs.double(forKey:"desktopPet.x") == 0.42 && prefs.double(forKey:"desktopPet.y") == 0.37 && prefs.string(forKey:"desktopPet.edge") == nil)
             c.applySuppression(false); c.catView.finishAnimations()
             let restored = c.cat.frame
@@ -1116,7 +1130,23 @@ extension DesktopPetController {
         precondition(c.suppressed && c.cat.frame.size == CGSize(width:44,height:44))
         coverage = []; c.refreshEnvironment(); c.catView.finishAnimations()
         precondition(!c.suppressed && c.cat.frame == original)
-        return ["full-screen collects to the nearest left or right edge", "full-screen edge uses native auxiliary-space behavior", "full-screen collection does not overwrite saved placement or manual fold intent", "full-screen edge stays quiet without hover expansion or timers", "exit restores the original expanded position", "a previously manual fold stays folded after exit", "rapid full-screen reversal cancels stale edge travel", "sleep during edge travel resumes compactly and exits back to original placement"]
+        coverage = [PetFullscreenMonitor.displayID(screen)]
+        c.applySuppression(true); c.settleFullScreenCompact(); c.peekArmed = true
+        let anchor = c.cat.frame
+        c.sampleProximity(CGPoint(x:anchor.midX,y:anchor.midY),at:200)
+        c.catView.onClick(); c.catView.finishAnimations()
+        precondition(c.fullScreenPinned && c.behavior.edge == nil && muted == 0)
+        let pinned = c.cat.frame
+        c.sampleProximity(.zero,at:300); c.refreshEnvironment()
+        precondition(c.cat.frame == pinned && c.behavior.edge == nil && c.fullScreenPinned)
+        c.applySuppression(false); c.catView.finishAnimations()
+        precondition(c.cat.frame == pinned && !c.fullScreenPinned)
+        let spaces: [[String:Any]] = [
+            ["Display Identifier":"normal", "Current Space":["type":0], "Spaces":[["type":4]]],
+            ["Display Identifier":"fullscreen", "Current Space":["type":4]],
+            ["Display Identifier":"unknown", "Current Space":["type":99]]]
+        precondition(PetFullscreenMonitor.fullScreenIdentifiers(spaces) == ["fullscreen"])
+        return ["full-screen pin remains expanded across refresh and exit", "native full-screen Space type excludes ordinary and unknown Spaces", "full-screen collects to the nearest left or right edge", "full-screen edge uses native auxiliary-space behavior", "full-screen collection does not overwrite saved placement or manual fold intent", "full-screen edge supports proximity expansion without muting", "exit restores the original expanded position", "a previously manual fold stays folded after exit", "rapid full-screen reversal cancels stale edge travel", "sleep during edge travel resumes compactly and exits back to original placement"]
     }
     @MainActor static func liveFullScreenEdgeCheck() {
         let previousFront = NSWorkspace.shared.frontmostApplication?.processIdentifier
