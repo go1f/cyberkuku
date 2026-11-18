@@ -36,6 +36,16 @@ struct PetChecks {
             expectTrue(first.minY >= small.maxY)
             expectTrue(abs(first.midX-small.midX) < 40)
         }
+        // Two simultaneous messages stay around the head rather than stacking far above it.
+        for x in [box.minX+8,box.midX,box.maxX-PetPlacement.companionSize.width-8] {
+            let pet = CGRect(origin:CGPoint(x:x,y:250),size:PetPlacement.companionSize)
+            for seed in 0..<24 {
+                let frames = PetPlacement.bubbles(around:pet,sizes:Array(repeating:CGSize(width:110,height:76),count:2),in:box,seed:seed)
+                let head = PetPlacement.headCenter(in:pet)
+                for frame in frames { expectTrue(hypot(frame.midX-head.x,frame.midY-head.y) < 145) }
+                expectFalse(frames[0].intersects(frames[1]))
+            }
+        }
         let bounds = CGRect(x:0,y:0,width:110,height:76)
         let body = bounds.insetBy(dx:12,dy:12)
         for step in 0..<72 {

@@ -36,6 +36,12 @@ public enum PetPlacement {
                 let dy = sin(angle)*(cat.height/2+size.height/2+12)
                 return clamp(CGRect(x:cat.midX+dx-size.width/2,y:cat.midY+dy-size.height/2,width:size.width,height:size.height),to:area)
             }
+            // Place additional speech beside the head before considering farther rows.
+            for x in [cat.maxX+10,cat.minX-size.width-10] {
+                for dy in [-size.height*0.25,0,size.height*0.25] {
+                    candidates.append(clamp(CGRect(x:x,y:head.y-size.height/2+dy,width:size.width,height:size.height),to:area))
+                }
+            }
             for slot in -4...4 {
                 candidates.append(clamp(CGRect(x:head.x-size.width/2+Double(slot)*(size.width+8),y:cat.maxY+10,width:size.width,height:size.height),to:area))
                 for x in [cat.maxX+10,cat.minX-size.width-10] {
@@ -47,7 +53,12 @@ public enum PetPlacement {
             }
             func overlap(_ a: CGRect,_ b: CGRect) -> Double { let i = a.intersection(b); return i.isNull ? 0 : i.width*i.height }
             func cost(_ frame: CGRect) -> Double {
-                overlap(frame,cat)*10000 + result.reduce(0) { $0+overlap(frame.insetBy(dx:-4,dy:-4),$1)*10000 } + reserved.reduce(0) { $0+overlap(frame.insetBy(dx:-4,dy:-4),$1)*10000 } + hypot(frame.midX-head.x,frame.midY-head.y) + max(0,cat.maxY+10-frame.minY)*1.5 + abs(frame.midX-head.x)*0.15 + 8*sin(frame.midX*0.13+frame.midY*0.07+Double(seed))
+                let collisions = overlap(frame,cat)*10000 + result.reduce(0) { $0+overlap(frame.insetBy(dx:-4,dy:-4),$1)*10000 } + reserved.reduce(0) { $0+overlap(frame.insetBy(dx:-4,dy:-4),$1)*10000 }
+                let distance = hypot(frame.midX-head.x,frame.midY-head.y)
+                // Only the first bubble prefers the upper centre. Applying this penalty
+                // to every bubble pushes later messages into distant rows above it.
+                let upperPreference = index == 0 ? max(0,cat.maxY+10-frame.minY)*1.5 : max(0,head.y-frame.midY)*0.25
+                return collisions + distance + upperPreference + abs(frame.midX-head.x)*0.15 + 8*sin(frame.midX*0.13+frame.midY*0.07+Double(seed))
             }
             if let best = candidates.min(by: { cost($0) < cost($1) }) { result.append(best) }
         }
