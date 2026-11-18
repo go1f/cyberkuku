@@ -761,10 +761,10 @@ private final class CatCompanionView: NSView {
                 if let art = Self.faceArt { drawArtwork(art,centeredAt:CGPoint(x:-9,y:0),in:c) }
             case .hand:
                 // The open end stays at the edge; the rounded original hand reaches inward.
-                c.translateBy(x:4.5,y:0); c.rotate(by:.pi/2)
+                c.translateBy(x:5.5,y:0); c.rotate(by:.pi/2)
                 if let art = Self.handArt { drawArtwork(art,centeredAt:.zero,in:c) }
             case .ears:
-                c.translateBy(x:1,y:1); c.rotate(by:-.pi/3.6)
+                c.translateBy(x:3,y:1); c.rotate(by:-.pi/3.6)
                 if let art = Self.earArt { drawArtwork(art,centeredAt:.zero,in:c) }
             }
             return
