@@ -6,6 +6,8 @@ public enum PetEdgePose: Int, CaseIterable, Sendable { case hand, face, ears }
 
 /// Appearance state only. It has no access to monitoring or dismissal timers.
 public struct PetEdgeBehavior {
+    // A fixed entry for all three poses, tall enough for the original-scale profile.
+    public static let foldedSize = CGSize(width:44,height:64)
     public private(set) var edge: PetEdge?
     public private(set) var pose: PetEdgePose = .hand
     public private(set) var nextChange: Double?
@@ -50,8 +52,9 @@ public struct PetEdgeBehavior {
         return nil
     }
     public static func foldedFrame(side: PetEdge, centerY: Double, area: CGRect) -> CGRect {
-        CGRect(x: side == .left ? area.minX : area.maxX-44,
-               y: min(max(centerY-22,area.minY+8),area.maxY-52),width:44,height:44)
+        CGRect(x: side == .left ? area.minX : area.maxX-foldedSize.width,
+               y: min(max(centerY-foldedSize.height/2,area.minY+8),area.maxY-foldedSize.height-8),
+               width:foldedSize.width,height:foldedSize.height)
     }
     /// Full-display coverage is checked independently for each display, including its notch.
     public static func coversDisplay(window: CGRect, screen: CGRect, safeTop: Double) -> Bool {

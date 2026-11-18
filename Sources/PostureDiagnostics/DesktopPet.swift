@@ -579,6 +579,12 @@ private final class CatCompanionView: NSView {
     }()
     private static func piece(_ rect: CGRect) -> CGImage? { original?.cropping(to:rect)?.copy(maskingColorComponents:[245,255,245,255,245,255]) }
     private let artwork = CatCompanionView.piece(CGRect(x:220,y:40,width:540,height:910))
+    private static let artworkScale = (PetPlacement.companionSize.height-2*8*0.6)/910
+
+    private func drawArtwork(_ art: CGImage, centeredAt center: CGPoint, in context: CGContext) {
+        let size = CGSize(width:CGFloat(art.width)*Self.artworkScale,height:CGFloat(art.height)*Self.artworkScale)
+        context.draw(art,in:CGRect(x:center.x-size.width/2,y:center.y-size.height/2,width:size.width,height:size.height))
+    }
     /// Original pixels, bounded by the source silhouette instead of a visible rectangular crop.
     private static func maskedPiece(_ rect: CGRect,contours: [[CGPoint]]) -> CGImage? {
         guard let source = piece(rect), let c = CGContext(data:nil,width:Int(rect.width),height:Int(rect.height),bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
@@ -747,22 +753,19 @@ private final class CatCompanionView: NSView {
             if t<0.22 { exposure = 1-t/0.22 }
             else if t<0.3 { exposure = 0 }
             else if t<0.85 { let p = (t-0.3)/0.55; exposure = p*p*(3-2*p) }
-            let size: CGSize = pose == .hand ? CGSize(width:22,height:18) : pose == .ears ? CGSize(width:24,height:32) : CGSize(width:22,height:44)
             c.translateBy(x:side == .left ? 0 : bounds.width,y:bounds.midY)
             if side == .right { c.scaleBy(x:-1,y:1) }
-            c.translateBy(x:-(1-exposure)*(size.width+3),y:0)
-            if pose == .face, let art = Self.faceArt { c.draw(art,in:CGRect(x:-14,y:-19.0125,width:35.1,height:38.025)) }
-            else {
-                let art = pose == .hand ? Self.handArt : Self.earArt
-                if pose == .hand {
-                    // The open end stays at the edge; the rounded original hand reaches inward.
-                    c.translateBy(x:size.width/2,y:0); c.rotate(by:.pi/2)
-                    if let art { c.draw(art,in:CGRect(x:-size.height/2,y:-size.width/2,width:size.height,height:size.width)) }
-                } else {
-                    // Only the two source ears are present; the head/forehead is not part of this piece.
-                    c.translateBy(x:-7,y:1); c.rotate(by:-.pi/3.6)
-                    if let art { c.draw(art,in:CGRect(x:-18.4,y:-6,width:36.8,height:27.37)) }
-                }
+            c.translateBy(x:-(1-exposure)*24,y:0)
+            switch pose {
+            case .face:
+                if let art = Self.faceArt { drawArtwork(art,centeredAt:CGPoint(x:-9,y:0),in:c) }
+            case .hand:
+                // The open end stays at the edge; the rounded original hand reaches inward.
+                c.translateBy(x:4.5,y:0); c.rotate(by:.pi/2)
+                if let art = Self.handArt { drawArtwork(art,centeredAt:.zero,in:c) }
+            case .ears:
+                c.translateBy(x:1,y:1); c.rotate(by:-.pi/3.6)
+                if let art = Self.earArt { drawArtwork(art,centeredAt:.zero,in:c) }
             }
             return
         }
@@ -777,15 +780,17 @@ private final class CatCompanionView: NSView {
         let width = p<1 ? 0.18+0.82*abs(cos(.pi*p)) : 1
         c.translateBy(x:bounds.midX,y:bounds.midY); c.scaleBy(x:sign*width,y:1+0.025*sin(.pi*p)); c.translateBy(x:-bounds.midX,y:-bounds.midY)
         guard let artwork else { return }
-        let rect = bounds.insetBy(dx:bounds.width*5/104,dy:bounds.height*8/174)
-        c.draw(artwork,in:rect)
+        let center = CGPoint(x:bounds.midX,y:bounds.midY)
+        drawArtwork(artwork,centeredAt:center,in:c)
         guard breathes && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        let scale = Self.artworkScale
+        let origin = CGPoint(x:center.x-CGFloat(artwork.width)*scale/2,y:center.y+CGFloat(artwork.height)*scale/2)
         let phase = now.truncatingRemainder(dividingBy:5)/5, t = phase<0.4 ? phase/0.4 : (1-phase)/0.6
         let breath = (1-cos(.pi*t))/2
         for y in stride(from:570,to:752,by:2) {
             let v = Double(y-570)/182, shift = 5*breath*pow(sin(.pi*v),2)
             guard let strip = artwork.cropping(to:CGRect(x:260,y:y,width:220,height:2)) else { continue }
-            c.draw(strip,in:CGRect(x:rect.minX+260/540*rect.width,y:rect.maxY-CGFloat(y+2)/910*rect.height,width:CGFloat(220+shift)/540*rect.width,height:2/910*rect.height))
+            c.draw(strip,in:CGRect(x:origin.x+260*scale,y:origin.y-CGFloat(y+2)*scale,width:CGFloat(220+shift)*scale,height:2*scale))
         }
     }
 }
@@ -928,14 +933,14 @@ extension DesktopPetChecks {
         for (i,pair) in [PetEdge.left,.right].flatMap({ side in PetEdgePose.allCases.map { (side,$0) } }).enumerated() {
             let (side,pose) = pair
             let x = CGFloat(30+i*127)
-            let view = CatCompanionView(frame:CGRect(x:0,y:0,width:44,height:44))
+            let view = CatCompanionView(frame:CGRect(origin:.zero,size:PetEdgeBehavior.foldedSize))
             view.setFolded(side,pose:pose,animated:false)
             let label = "\(side.rawValue) · \(pose)"
             (label as NSString).draw(at:CGPoint(x:x,y:500),withAttributes:[.font:NSFont.systemFont(ofSize:11),.foregroundColor:NSColor.darkGray])
             c.saveGState(); c.translateBy(x:x,y:440); view.draw(view.bounds); c.restoreGState()
             c.saveGState(); c.translateBy(x:x,y:260); c.scaleBy(x:2.5,y:2.5)
-            NSColor.gray.setStroke(); let line = NSBezierPath(); let edge: CGFloat = side == .left ? 0 : 44
-            line.move(to:CGPoint(x:edge,y:0)); line.line(to:CGPoint(x:edge,y:44)); line.lineWidth = 0.4; line.stroke()
+            NSColor.gray.setStroke(); let line = NSBezierPath(); let edge: CGFloat = side == .left ? 0 : view.bounds.maxX
+            line.move(to:CGPoint(x:edge,y:0)); line.line(to:CGPoint(x:edge,y:view.bounds.maxY)); line.lineWidth = 0.4; line.stroke()
             view.draw(view.bounds); c.restoreGState()
         }
         for (i,p) in [0.0,0.25,0.5,0.75,1.0].enumerated() {
@@ -968,7 +973,7 @@ extension DesktopPetController {
         precondition(controller.bubbles.count == 1)
         controller.fold(.right,screen:screen); controller.catView.finishAnimations()
         precondition(controller.behavior.edge == .right && controller.bubbles.isEmpty)
-        precondition(controller.cat.frame.size == CGSize(width:44,height:44))
+        precondition(controller.cat.frame.size == PetEdgeBehavior.foldedSize)
         let anchor = controller.cat.frame
         controller.catView.onDoubleClick(); precondition(opened == 1 && muted == 0 && controller.behavior.edge == .right)
         let down = NSEvent.mouseEvent(with:.leftMouseDown,location:.zero,modifierFlags:[],timestamp:0,windowNumber:0,context:nil,eventNumber:1,clickCount:1,pressure:0)!
@@ -985,7 +990,7 @@ extension DesktopPetController {
         controller.catView.onClick(); precondition(muted == 1)
         controller.catView.onDoubleClick(); precondition(opened == 2 && muted == 1)
         precondition(prefs.string(forKey:"desktopPet.edge") == nil)
-        return ["folded hit region remains 44x44", "folding hides bubbles without muting", "folded double click opens without expanding or muting", "full-screen suppression preserves folded intent and anchor", "full-screen exit does not replay bubbles", "interrupted press is cancelled without a stuck rotation pause", "folded single click unfolds and restores fresh alerts without muting", "expanded click gestures are preserved", "edge preference clears when unfolded (isolated preferences)"]
+        return ["folded hit region matches the fixed edge entry", "folding hides bubbles without muting", "folded double click opens without expanding or muting", "full-screen suppression preserves folded intent and anchor", "full-screen exit does not replay bubbles", "interrupted press is cancelled without a stuck rotation pause", "folded single click unfolds and restores fresh alerts without muting", "expanded click gestures are preserved", "edge preference clears when unfolded (isolated preferences)"]
     }
 }
 
@@ -1078,7 +1083,7 @@ extension DesktopPetController {
         precondition(!c.hoverPeeking && !c.peekReturning && c.behavior.edge == .right && c.cat.frame == right)
         c.applySuppression(false); c.sampleProximity(point,at:103)
         precondition(!c.hoverPeeking)
-        return ["240 rapid direction reversals keep the original grab offset despite window corrections", "mouse-up uses the final absolute pointer location", "newly folded companion waits for the pointer to leave before hover preview", "proximity temporarily expands without changing the stored folded intent", "leaving preview restores the same 44pt anchor", "clicking preview pins the expanded companion without muting", "pinned companion stays expanded after pointer exit", "full-screen interruption cancels preview and restores the original edge without replay"]
+        return ["240 rapid direction reversals keep the original grab offset despite window corrections", "mouse-up uses the final absolute pointer location", "newly folded companion waits for the pointer to leave before hover preview", "proximity temporarily expands without changing the stored folded intent", "leaving preview restores the same fixed anchor", "clicking preview pins the expanded companion without muting", "pinned companion stays expanded after pointer exit", "full-screen interruption cancels preview and restores the original edge without replay"]
     }
 }
 
@@ -1098,7 +1103,7 @@ extension DesktopPetController {
             let frame = CGRect(x:side == .left ? screen.visibleFrame.minX+80 : screen.visibleFrame.maxX-160,y:screen.visibleFrame.midY-50,width:62.4,height:104.4)
             c.cat.setFrame(frame,display:false); c.expandedFrame = frame; c.catView.setExpanded(from:nil,animated:false)
             c.applySuppression(true); c.settleFullScreenCompact(); c.ensureTimer()
-            precondition(c.automaticEdge == side && c.cat.frame.size == CGSize(width:44,height:44))
+            precondition(c.automaticEdge == side && c.cat.frame.size == PetEdgeBehavior.foldedSize)
             precondition(c.cat.collectionBehavior.contains(.fullScreenAuxiliary) && c.catView.fullScreenCompact)
             precondition(c.proximityTimer != nil && c.timer == nil)
             precondition(c.menuPresentation.detail.contains("自动收纳"))
@@ -1127,7 +1132,7 @@ extension DesktopPetController {
         c.applySuppression(true)
         coverage = [PetFullscreenMonitor.displayID(screen)]
         c.suspendAppearance(.screenLocked); c.resumeAppearance(.screenLocked)
-        precondition(c.suppressed && c.cat.frame.size == CGSize(width:44,height:44))
+        precondition(c.suppressed && c.cat.frame.size == PetEdgeBehavior.foldedSize)
         coverage = []; c.refreshEnvironment(); c.catView.finishAnimations()
         precondition(!c.suppressed && c.cat.frame == original)
         coverage = [PetFullscreenMonitor.displayID(screen)]
@@ -1167,7 +1172,7 @@ extension DesktopPetController {
             let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly,.excludeDesktopElements],kCGNullWindowID) as? [[String:Any]] ?? []
             let visible = windows.contains { ($0[kCGWindowNumber as String] as? NSNumber)?.intValue == c.cat.windowNumber }
             let focus = front == NSWorkspace.shared.frontmostApplication?.processIdentifier && !c.cat.isKeyWindow
-            let compact = c.cat.frame.size == CGSize(width:44,height:44)
+            let compact = c.cat.frame.size == PetEdgeBehavior.foldedSize
             c.cat.orderOut(nil); c.shutdown(); prefs.removePersistentDomain(forName:suite)
             print("{\"visibleOnExistingFullscreenDisplay\":\(visible),\"compact\":\(compact),\"focusPreserved\":\(focus)}")
             if !focus, let front { NSRunningApplication(processIdentifier:front)?.activate(options:[]) }

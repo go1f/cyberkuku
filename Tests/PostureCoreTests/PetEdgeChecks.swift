@@ -45,7 +45,7 @@ struct PetEdgeChecks {
             for side in [PetEdge.left,.right] {
                 for y in [screen.minY-100,screen.midY,screen.maxY+200] {
                     let frame = PetEdgeBehavior.foldedFrame(side:side,centerY:y,area:screen)
-                    expectTrue(screen.contains(frame) && frame.width == 44 && frame.height == 44)
+                    expectTrue(screen.contains(frame) && frame.size == PetEdgeBehavior.foldedSize)
                     expectTrue(side == .left ? frame.minX == screen.minX : frame.maxX == screen.maxX)
                 }
             }
