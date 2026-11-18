@@ -580,10 +580,50 @@ private final class CatCompanionView: NSView {
     private static func piece(_ rect: CGRect) -> CGImage? { original?.cropping(to:rect)?.copy(maskingColorComponents:[245,255,245,255,245,255]) }
     private let artwork = CatCompanionView.piece(CGRect(x:220,y:40,width:540,height:910))
     private static let artworkScale = (PetPlacement.companionSize.height-2*8*0.6)/910
+    private static let edgeDetailMagnification: CGFloat = 1.2
 
-    private func drawArtwork(_ art: CGImage, centeredAt center: CGPoint, in context: CGContext) {
-        let size = CGSize(width:CGFloat(art.width)*Self.artworkScale,height:CGFloat(art.height)*Self.artworkScale)
+    private func drawArtwork(_ art: CGImage, centeredAt center: CGPoint, in context: CGContext, magnification: CGFloat = 1) {
+        let scale = Self.artworkScale*magnification
+        let size = CGSize(width:CGFloat(art.width)*scale,height:CGFloat(art.height)*scale)
         context.draw(art,in:CGRect(x:center.x-size.width/2,y:center.y-size.height/2,width:size.width,height:size.height))
+    }
+    /// For the enlarged details, trim one source pixel at the outside of the ink and
+    /// let the original gray fill advance one pixel inside. The larger pose then has
+    /// about the same stroke width as the full-size cat, without redrawing the shape.
+    private static func compensateDetailInk(_ art: CGImage?) -> CGImage? {
+        guard let art else { return nil }
+        let width = art.width, height = art.height, rowBytes = width*4
+        let format = CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue
+        guard let context = CGContext(data:nil,width:width,height:height,bitsPerComponent:8,bytesPerRow:rowBytes,
+                                      space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:format), let data = context.data else { return art }
+        context.draw(art,in:CGRect(x:0,y:0,width:width,height:height))
+        let pixels = UnsafeMutableBufferPointer(start:data.assumingMemoryBound(to:UInt8.self),count:rowBytes*height)
+        let source = Array(pixels)
+        func brightness(at offset: Int) -> Int {
+            let alpha = Int(source[offset+3])
+            guard alpha > 0 else { return 0 }
+            return (Int(source[offset])+Int(source[offset+1])+Int(source[offset+2]))*255/alpha
+        }
+        for y in 0..<height {
+            for x in 0..<width {
+                let offset = y*rowBytes+x*4
+                guard source[offset+3] > 0 else { continue }
+                // Clamp at the crop edge so the seam can still meet the screen edge.
+                let neighbors = [offset-4*(x>0 ? 1 : 0),offset+4*(x+1<width ? 1 : 0),
+                                 offset-rowBytes*(y>0 ? 1 : 0),offset+rowBytes*(y+1<height ? 1 : 0)]
+                var alpha = Int(source[offset+3]), fill = offset, light = brightness(at:offset)
+                for neighbor in neighbors {
+                    alpha = min(alpha,Int(source[neighbor+3]))
+                    let candidate = brightness(at:neighbor)
+                    if candidate > light { fill = neighbor; light = candidate }
+                }
+                for channel in 0..<3 {
+                    pixels[offset+channel] = UInt8(Int(source[fill+channel])*alpha/Int(source[fill+3]))
+                }
+                pixels[offset+3] = UInt8(alpha)
+            }
+        }
+        return context.makeImage() ?? art
     }
     /// Original pixels, bounded by the source silhouette instead of a visible rectangular crop.
     private static func maskedPiece(_ rect: CGRect,contours: [[CGPoint]]) -> CGImage? {
@@ -606,11 +646,11 @@ private final class CatCompanionView: NSView {
         CGPoint(x:440,y:606),CGPoint(x:410,y:599),CGPoint(x:380,y:597),CGPoint(x:350,y:592),
         CGPoint(x:320,y:574),CGPoint(x:300,y:556),CGPoint(x:280,y:540),CGPoint(x:250,y:520),CGPoint(x:220,y:520)
     ]])
-    private static let earArt = maskedPiece(CGRect(x:411,y:44,width:160,height:119),contours:[[
+    private static let earArt = compensateDetailInk(maskedPiece(CGRect(x:411,y:44,width:160,height:119),contours:[[
         CGPoint(x:414,y:146),CGPoint(x:478,y:46),CGPoint(x:495,y:47),CGPoint(x:532,y:146)
     ],[
         CGPoint(x:494,y:86),CGPoint(x:534,y:50),CGPoint(x:550,y:51),CGPoint(x:572,y:148),CGPoint(x:551,y:152),CGPoint(x:512,y:134)
-    ]])
+    ]]))
     private static let handArt: CGImage? = {
         guard let source = original?.cropping(to:CGRect(x:417,y:650,width:78,height:116)) else { return nil }
         var bytes = [UInt8](repeating:0,count:78*116*4)
@@ -626,7 +666,7 @@ private final class CatCompanionView: NSView {
             }
             return context.makeImage()
         }
-        return image
+        return compensateDetailInk(image)
     }()
     private var now: Double { ProcessInfo.processInfo.systemUptime }
     var isAnimating: Bool { retreated != nil || now-flipStart<0.18 || now-appearStart<0.55 || frozenAt == nil && now-poseStart<0.85 }
@@ -761,11 +801,11 @@ private final class CatCompanionView: NSView {
                 if let art = Self.faceArt { drawArtwork(art,centeredAt:CGPoint(x:-9,y:0),in:c) }
             case .hand:
                 // The open end stays at the edge; the rounded original hand reaches inward.
-                c.translateBy(x:5.5,y:0); c.rotate(by:.pi/2)
-                if let art = Self.handArt { drawArtwork(art,centeredAt:.zero,in:c) }
+                c.translateBy(x:6.1,y:0); c.rotate(by:.pi/2)
+                if let art = Self.handArt { drawArtwork(art,centeredAt:.zero,in:c,magnification:Self.edgeDetailMagnification) }
             case .ears:
-                c.translateBy(x:3,y:1); c.rotate(by:-.pi/3.6)
-                if let art = Self.earArt { drawArtwork(art,centeredAt:.zero,in:c) }
+                c.translateBy(x:3.6,y:1); c.rotate(by:-.pi/3.6)
+                if let art = Self.earArt { drawArtwork(art,centeredAt:.zero,in:c,magnification:Self.edgeDetailMagnification) }
             }
             return
         }
