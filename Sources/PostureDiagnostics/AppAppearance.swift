@@ -35,7 +35,7 @@ final class AppAppearance {
             return true
         }
         image.isTemplate = true
-        image.accessibilityDescription = "KukuSeat 坐姿监测"
+        image.accessibilityDescription = "cyberkuku 桌面伙伴"
         return image
     }
     private func icon(named name: String) -> NSImage? {

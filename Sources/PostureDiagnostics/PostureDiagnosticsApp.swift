@@ -4,6 +4,7 @@ import PostureCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var host: CompanionHost?
     private var model: DiagnosticModel?
     private var desktop: DesktopCoordinator?
     private var smokeLog: [[String: Any]] = []
@@ -11,6 +12,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         appearance.start()
         let args = CommandLine.arguments
+        let diagnostics = ["--demo", "--ui-smoke", "--camera-check", "--background-check", "--layout-check", "--update-qa"]
+        if !args.contains(where: diagnostics.contains) {
+            let host = CompanionHost()
+            self.host = host
+            host.openHome()
+            if args.contains("--show-companion") { host.appearance.pet?.showByUser() }
+            return
+        }
         let demo = args.contains("--demo") || args.contains("--ui-smoke")
         let model = DiagnosticModel(demo: demo)
         let desktop = DesktopCoordinator(model: model)
@@ -25,10 +34,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             desktop.hideMain()
             let rings = args.contains("--ring-layout-review")
             let alerts = rings ? [
-                MonitoringAlert(id: "posture.head", title: "歪头", message: "头向左扶正", seconds: 8, recovering: true, recoveryProgress: 1),
-                MonitoringAlert(id: "posture.shoulders", title: "高低肩", message: "双肩放平", seconds: 8, recovering: true, recoveryProgress: 0.6),
-                MonitoringAlert(id: "habit.mouth", title: "口部变化", message: "放松嘴唇", seconds: 8, recovering: true, recoveryProgress: 1)
-            ] : [MonitoringAlert(id: "posture.head", title: "歪头", message: "头向左扶正", seconds: 8, recovering: false)]
+                BubbleMessage(id: "posture.head", title: "歪头", message: "头向左扶正", seconds: 8, recovering: true, recoveryProgress: 1),
+                BubbleMessage(id: "posture.shoulders", title: "高低肩", message: "双肩放平", seconds: 8, recovering: true, recoveryProgress: 0.6),
+                BubbleMessage(id: "habit.mouth", title: "口部变化", message: "放松嘴唇", seconds: 8, recovering: true, recoveryProgress: 1)
+            ] : [BubbleMessage(id: "posture.head", title: "歪头", message: "头向左扶正", seconds: 8, recovering: false)]
             let ids = Set(alerts.map(\.id))
             desktop.reminders.synchronize(alerts, recovered: false, ongoingIDs: ids)
             desktop.reminders.showReviewWindow()
@@ -84,9 +93,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        desktop?.showMain(expandPreview: false); return true
+        if let host { host.openHome() } else { desktop?.showMain(expandPreview: false) }; return true
     }
-    func applicationWillTerminate(_ notification: Notification) { appearance.stop(); desktop?.shutdown(); model?.shutdown() }
+    func applicationWillTerminate(_ notification: Notification) { appearance.stop(); host?.shutdown(); desktop?.shutdown(); model?.shutdown() }
 
     private func runSmoke(model: DiagnosticModel, desktop: DesktopCoordinator) {
         desktop.showPiP()
@@ -140,6 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 enum PostureDiagnosticsApp {
     @MainActor static func main() {
+        if CommandLine.arguments.contains("--companion-host-check") { CompanionHostChecks.run(); return }
         if CommandLine.arguments.contains("--fullscreen-edge-live-check") { DesktopPetController.liveFullScreenEdgeCheck(); return }
         if let index = CommandLine.arguments.firstIndex(of:"--pet-edge-render"), CommandLine.arguments.count > index+1 {
             do { try DesktopPetChecks.renderEdges(directory:CommandLine.arguments[index+1]) } catch { fputs("Edge render failed: \(error)\n",stderr); exit(1) }; return

@@ -14,7 +14,7 @@ final class PassivePanel: NSPanel {
 
 struct BannerPresentation: Equatable {
     var text = ""
-    var alerts: [MonitoringAlert] = []
+    var alerts: [BubbleMessage] = []
     var island = false
     var expanded = false
 }
@@ -91,7 +91,7 @@ private struct BannerView: View {
         .accessibilityElement(children: .combine)
         .accessibilityAction(named: "收起提醒", content.dismiss)
     }
-    private func row(_ text: String, alert: MonitoringAlert?) -> some View {
+    private func row(_ text: String, alert: BubbleMessage?) -> some View {
         HStack(spacing: BannerLayout.gap) {
             if let alert, alert.recovering || alert.resolved {
                 RecoveryIndicator(progress: alert.resolved ? 1 : alert.recoveryProgress,
@@ -112,7 +112,9 @@ private struct BannerView: View {
 @MainActor final class ReminderPanelController {
     var onOpenMonitor: () -> Void = {}
     var onPetVisibilityChanged: () -> Void = {}
-    private let pet: DesktopPetController
+    private var pet: DesktopPetController?
+    private let hosted: Bool
+    private var usesBanner: Bool { hosted && (pet == nil || pet?.userHidden == true) }
     private let panel: PassivePanel
     private let content = BannerContent()
     private let router: DisplayRouter
@@ -126,13 +128,15 @@ private struct BannerView: View {
     private(set) var recoveryCount = 0
     private(set) var focusPreserved = true
     private(set) var lastScreenName = ""
+    private var nudgeOwner: String?
+    private var nudgeIsPreview = false
     private var habitBanner = false
     private var lastShownAt = -Double.infinity
-    private var activeAlerts: [MonitoringAlert] = []
-    private var presentedAlerts: [MonitoringAlert] = []
+    private var activeAlerts: [BubbleMessage] = []
+    private var presentedAlerts: [BubbleMessage] = []
     private var missingSince: [String: Double] = [:]
     private var confirmedAt: [String: Double] = [:]
-    private var latest = ReminderPresentationUpdate(alerts: [], ongoingIDs: [])
+    private var latest = BubbleSnapshot(alerts: [], ongoingIDs: [])
     private var dismissal = ReminderDismissal()
     private var screenObserver: NSObjectProtocol?
     private var targetFrame: NSRect?
@@ -142,9 +146,10 @@ private struct BannerView: View {
     private let completionHold = 3.0
     private let completionRingHold = 0.35
 
-    init(router: DisplayRouter, now: @escaping () -> Double = { ProcessInfo.processInfo.systemUptime }, presentsOnScreen: Bool = true) {
+    init(router: DisplayRouter, now: @escaping () -> Double = { ProcessInfo.processInfo.systemUptime }, presentsOnScreen: Bool = true, hosted: Bool = false) {
         self.router = router; self.now = now; self.presentsOnScreen = presentsOnScreen
-        self.pet = DesktopPetController(presentsOnScreen:presentsOnScreen)
+        self.hosted = hosted
+        self.pet = hosted ? nil : DesktopPetController(presentsOnScreen:presentsOnScreen)
         panel = PassivePanel(contentRect: NSRect(x: 0, y: 0, width: 180, height: 40),
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false; panel.isOpaque = false
@@ -152,9 +157,7 @@ private struct BannerView: View {
         panel.level = .floating; panel.hidesOnDeactivate = false; panel.ignoresMouseEvents = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         content.dismiss = { [weak self] in self?.dismissByUser() }
-        pet.onDismiss = { [weak self] in self?.dismissByUser() }
-        pet.onOpenMonitor = { [weak self] in self?.onOpenMonitor() }
-        pet.onVisibilityChanged = { [weak self] in self?.onPetVisibilityChanged() }
+        connectPet()
         let host = BannerHostingView(rootView: BannerView(content: content))
         host.sizingOptions = []
         host.wantsLayer = true; host.layer?.cornerRadius = BannerLayout.radius; host.layer?.masksToBounds = true
@@ -166,20 +169,42 @@ private struct BannerView: View {
     }
     deinit { lifecycleWork?.cancel(); nudgeWork?.cancel(); if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) } }
 
+    private func connectPet() {
+        pet?.onDismiss = { [weak self] in self?.dismissByUser() }
+        pet?.onOpenMonitor = { [weak self] in self?.onOpenMonitor() }
+        pet?.onVisibilityChanged = { [weak self] in self?.refreshSurface(); self?.onPetVisibilityChanged() }
+    }
+    func attachCompanion(_ companion: DesktopPetController?) {
+        pet?.shutdown()
+        pet = companion
+        connectPet()
+        pet?.setEnabled(true)
+        refreshSurface()
+    }
+    private func refreshSurface() {
+        guard hosted, visible else { return }
+        if usesBanner {
+            placePanel()
+            if presentsOnScreen { panel.orderFrontRegardless() }
+        } else {
+            panel.orderOut(nil)
+            pet?.present(content.presentation.alerts, text: content.presentation.text)
+        }
+    }
     func dismissByUser() {
         dismissal.dismiss(Set(activeAlerts.map(\.id)), at: now())
         clearPresentation(); hide()
     }
-    func synchronize(_ update: ReminderPresentationUpdate) {
+    func synchronize(_ update: BubbleSnapshot) {
         latest = update; activeAlerts = update.alerts
-        pet.setEnabled(update.enabled && presentsOnScreen)
+        if !hosted { pet?.setEnabled(update.enabled && presentsOnScreen) }
         lifecycleWork?.cancel(); lifecycleWork = nil
         let time = now()
         dismissal.reconcile(ongoingIDs: update.ongoingIDs, at: time)
         guard update.enabled, dismissal.allows("*", at: time) else { clearPresentation(); hide(); return }
         if habitBanner && update.alerts.isEmpty { return }
         let incoming = Dictionary(update.alerts.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
-        var rows: [MonitoringAlert] = []
+        var rows: [BubbleMessage] = []
         var deadlines: [Double] = []
         for old in presentedAlerts {
             if var fresh = incoming[old.id] {
@@ -222,7 +247,7 @@ private struct BannerView: View {
         var state = content.presentation; state.alerts = rows; state.text = ""
         if state != content.presentation { content.presentation = state }
         if visible { placePanel() } else { show() }
-        if presentsOnScreen { pet.present(rows, text: "") }
+        if presentsOnScreen { pet?.present(rows, text: "") }
         if let deadline = deadlines.min() {
             let work = DispatchWorkItem { [weak self] in
                 MainActor.assumeIsolated { guard let self else { return }; self.synchronize(self.latest) }
@@ -232,8 +257,8 @@ private struct BannerView: View {
         }
     }
     // Diagnostic scenarios retain this convenience; production supplies explicit per-channel recovery evidence.
-    func synchronize(_ alerts: [MonitoringAlert], recovered: Bool, ongoingIDs: Set<String>? = nil) {
-        synchronize(ReminderPresentationUpdate(alerts: alerts, ongoingIDs: ongoingIDs ?? Set(alerts.map(\.id)),
+    func synchronize(_ alerts: [BubbleMessage], recovered: Bool, ongoingIDs: Set<String>? = nil) {
+        synchronize(BubbleSnapshot(alerts: alerts, ongoingIDs: ongoingIDs ?? Set(alerts.map(\.id)),
             recoveredIDs: recovered ? Set(presentedAlerts.map(\.id)) : []))
     }
     private func clearPresentation() {
@@ -243,27 +268,37 @@ private struct BannerView: View {
     func handle(_ event: ReminderEvent) {
         switch event {
         case .correction(let kind):
-            let alert = MonitoringAlert(id: "legacy", title: "", message: kind.message, seconds: 0, recovering: false)
-            synchronize(ReminderPresentationUpdate(alerts: [alert], ongoingIDs: [alert.id]))
+            let alert = BubbleMessage(id: "legacy", title: "", message: kind.message, seconds: 0, recovering: false)
+            synchronize(BubbleSnapshot(alerts: [alert], ongoingIDs: [alert.id]))
         case .recovered:
-            synchronize(ReminderPresentationUpdate(alerts: [], ongoingIDs: [], recoveredIDs: Set(presentedAlerts.map(\.id))))
-        case .quiet: synchronize(ReminderPresentationUpdate(alerts: [], ongoingIDs: Set(activeAlerts.map(\.id))))
+            synchronize(BubbleSnapshot(alerts: [], ongoingIDs: [], recoveredIDs: Set(presentedAlerts.map(\.id))))
+        case .quiet: synchronize(BubbleSnapshot(alerts: [], ongoingIDs: Set(activeAlerts.map(\.id))))
         case .nudge(let message): showNudge(message)
         }
     }
     func preview() { showNudge("坐正，放松肩膀", ignoreInterval: true) }
-    private func showNudge(_ message: String, ignoreInterval: Bool = false) {
+    func withdraw(owner: String, includingPreview: Bool = true) {
+        let prefix = owner + "/"
+        presentedAlerts.removeAll { $0.id.hasPrefix(prefix) }
+        missingSince = missingSince.filter { !$0.key.hasPrefix(prefix) }
+        confirmedAt = confirmedAt.filter { !$0.key.hasPrefix(prefix) }
+        if habitBanner, nudgeOwner == owner, includingPreview || !nudgeIsPreview {
+            nudgeWork?.cancel(); habitBanner = false; hide()
+        }
+    }
+    func showNudge(_ message: String, ignoreInterval: Bool = false, owner: String? = nil) {
         guard activeAlerts.isEmpty, presentedAlerts.isEmpty, dismissal.allows("nudge", at: now()),
               ignoreInterval || now()-lastShownAt >= 10 else { return }
+        nudgeOwner = owner; nudgeIsPreview = ignoreInterval
         habitBanner = true
         var state = content.presentation; state.text = message; state.alerts = []; content.presentation = state
         show()
-        if presentsOnScreen { pet.setEnabled(true); pet.present([], text: message) }
+        if presentsOnScreen { if !hosted { pet?.setEnabled(true) }; pet?.present([], text: message) }
         let work = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.habitBanner = false; self?.hide() } }
         nudgeWork = work; DispatchQueue.main.asyncAfter(deadline: .now()+4, execute: work)
     }
     private func placePanel() {
-        guard !presentsOnScreen else { return }
+        guard usesBanner || !presentsOnScreen else { return }
         guard let screen = router.workingScreen() else { return }
         lastScreenName = screen.localizedName
         let single = NSScreen.screens.count == 1 || CommandLine.arguments.contains("--banner-review")
@@ -300,7 +335,7 @@ private struct BannerView: View {
         let front = NSWorkspace.shared.frontmostApplication?.processIdentifier, key = NSApplication.shared.keyWindow
         token += 1; let current = token; lastShownAt = now()
         if !visible { panel.alphaValue = 0; content.presentation.expanded = false }
-        placePanel(); visible = true; showCount += 1
+        placePanel(); if usesBanner && presentsOnScreen { panel.orderFrontRegardless() }; visible = true; showCount += 1
         // The legacy offscreen panel retains diagnostic geometry only.
         // Interactive presentation uses independent, tightly fitted pet/bubble panels.
         DispatchQueue.main.async { [weak self] in if self?.token == current { self?.content.presentation.expanded = true } }
@@ -309,16 +344,16 @@ private struct BannerView: View {
             && key === NSApplication.shared.keyWindow && !panel.isKeyWindow
     }
     func hide() {
-        pet.hideBubbles()
+        pet?.hideBubbles()
         guard visible else { return }
         token += 1; let current = token; visible = false; content.presentation.expanded = false
         NSAnimationContext.runAnimationGroup({ context in context.duration = 0.25; panel.animator().alphaValue = 0 },
             completionHandler: { [weak self] in MainActor.assumeIsolated { if self?.token == current { self?.panel.orderOut(nil) } } })
     }
-    var petMenuPresentation: PetMenuPresentation { pet.menuPresentation }
-    func showPet() { pet.showByUser() }
-    func togglePet() { pet.toggleVisibility() }
-    func shutdown() { hide(); pet.shutdown() }
+    var petMenuPresentation: PetMenuPresentation { pet?.menuPresentation ?? PetMenuPresentation(action: "显示伙伴", detail: "桌面形象已关闭", check: .off, canHide: false) }
+    func showPet() { pet?.showByUser() }
+    func togglePet() { pet?.toggleVisibility() }
+    func shutdown() { clearPresentation(); hide(); pet?.shutdown() }
     func showReviewWindow() {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: max(320, episodeSize.width), height: max(90, episodeSize.height+24)),
             styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -332,7 +367,7 @@ private struct BannerView: View {
         try NativeViewRender.png(BannerView(content: content), size: episodeSize, to: url)
     }
     var snapshot: [String: Any] {
-        ["desktopPet": pet.snapshot, "windowID": panel.windowNumber, "visible": visible, "showCount": showCount, "recoveryCount": recoveryCount,
+        ["surface": usesBanner ? "banner" : "companion", "desktopPet": pet?.snapshot ?? [:], "windowID": panel.windowNumber, "visible": visible, "showCount": showCount, "recoveryCount": recoveryCount,
          "focusPreserved": focusPreserved, "canBecomeKey": panel.canBecomeKey, "ignoresMouseEvents": panel.ignoresMouseEvents,
          "screenName": lastScreenName, "persistent": !activeAlerts.isEmpty, "activeAlertIDs": activeAlerts.map(\.id),
          "alertCount": activeAlerts.count, "panelHeight": panel.frame.height, "panelWidth": panel.frame.width,

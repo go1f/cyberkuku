@@ -1,10 +1,10 @@
-# KukuSeat · 坐姿监测
+# cyberkuku · 桌面电子伙伴
 
-使用 MacBook 内置摄像头的本地坐姿监测应用。面向笔记本敞开、外接显示器位于上方的工作情境，不需要外接摄像头或手机。
+默认的小灰猫可以独立留在桌面。打开「能力」可启停桌面形象和「注意坐姿」。坐姿插件使用 MacBook 内置摄像头进行本地分析，提醒通过宿主气泡显示。面向笔记本敞开、外接显示器位于上方的工作情境，不需要外接摄像头或手机。
 
 ## 安装
 
-从 [GitHub 最新发行版](https://github.com/go1f/kukuseat/releases/latest) 下载 macOS arm64 DMG，打开后把 `KukuSeat.app` 拖到 Applications。也提供 ZIP。安装后可从“应用程序”、Spotlight 或 Dock 启动，菜单栏入口继续保留。
+从 [GitHub 最新发行版](https://github.com/go1f/kukuseat/releases/latest) 下载 macOS arm64 DMG，打开后把 `cyberkuku.app` 拖到 Applications。也提供 ZIP。安装后可从“应用程序”、Spotlight 或 Dock 启动，菜单栏入口继续保留。
 
 发行包包含原生界面、本地 MediaPipe 推理运行时和模型，**无需安装 Python、无需克隆项目，也不需要联网推理**。目标为 Apple Silicon Mac，包括 M5 / macOS 27；当前已在 M2 / macOS 27 验证，尚未在 M5 实机测试。
 

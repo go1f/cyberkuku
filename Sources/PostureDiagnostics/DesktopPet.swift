@@ -57,7 +57,7 @@ struct PetMenuPresentation: Equatable {
     private var catView: CatCompanionView!
     private var behavior = PetEdgeBehavior()
     private var rng = SystemRandomNumberGenerator()
-    private var lastMessages: [MonitoringAlert] = []
+    private var lastMessages: [BubbleMessage] = []
     private var lastText = "", lastPresentation = -Double.infinity
     private var expandedFrame = CGRect.zero
     private var stableFrames: [String:CGRect] = [:]
@@ -139,6 +139,12 @@ struct PetMenuPresentation: Equatable {
         return NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
     }
     private func overlap(_ a: CGRect,_ b: CGRect) -> CGFloat { let i = a.intersection(b); return i.isNull ? 0 : i.width*i.height }
+    var userHidden: Bool { hidden }
+    func useSkin(_ skin: CompanionSkin) {
+        catView.skin = skin
+        cat.title = "cyberkuku " + skin.title
+        catView.setAccessibilityLabel(skin.title + "，双击打开伙伴或监测窗口，拖到左右边缘收纳")
+    }
     private var wantsVisible: Bool { !hidden && (enabled || manuallyShown) }
     private var allowsDisplay: Bool { wantsVisible && sessionBlockers.isEmpty }
     var menuPresentation: PetMenuPresentation {
@@ -310,7 +316,7 @@ struct PetMenuPresentation: Equatable {
         for (_,view) in bubbles.values where !view.finishedInflating { view.needsDisplay = true }
         ensureTimer()
     }
-    func present(_ alerts: [MonitoringAlert],text: String) {
+    func present(_ alerts: [BubbleMessage],text: String) {
         lastMessages = alerts; lastText = text; lastPresentation = ProcessInfo.processInfo.systemUptime
         guard enabled && allowsDisplay && (!suppressed || fullScreenPinned) && behavior.edge == nil && !dragging else { clearBubbleWindows(); return }
         let items: [(String,String,Bool,Bool)] = alerts.isEmpty ? (text.isEmpty ? [] : [("nudge",text,false,false)]) : alerts.map { ($0.id,$0.message,$0.recovering,$0.resolved) }
@@ -548,6 +554,7 @@ struct PetMenuPresentation: Equatable {
 
 private final class CatCompanionView: NSView {
     var onClick: () -> Void = {}, onDoubleClick: () -> Void = {}
+    var skin: CompanionSkin = .cat { didSet { needsDisplay = true } }
     var breathes = true
     var fullScreenCompact = false { didSet { updateHelp(); window?.invalidateCursorRects(for:self) } }
     var onMove: (NSPoint,Bool) -> Void = { _,_ in }
@@ -738,7 +745,7 @@ private final class CatCompanionView: NSView {
     }
     override func rightMouseDown(with event:NSEvent) {
         cancelPendingClick(); pressed = true; interactionChanged()
-        let menu = NSMenu(); let item = NSMenuItem(title:"隐藏小灰猫（可从菜单栏找回）",action:#selector(hidePet),keyEquivalent:"")
+        let menu = NSMenu(); let item = NSMenuItem(title:"隐藏" + skin.title + "（可从菜单栏找回）",action:#selector(hidePet),keyEquivalent:"")
         item.target = self; menu.addItem(item); NSMenu.popUpContextMenu(menu,with:event,for:self)
         pressed = false; interactionChanged()
     }
@@ -804,6 +811,7 @@ private final class CatCompanionView: NSView {
             c.translateBy(x:side == .left ? 0 : bounds.width,y:bounds.midY)
             if side == .right { c.scaleBy(x:-1,y:1) }
             c.translateBy(x:-(1-exposure)*bounds.width,y:0)
+            if skin == .boat { PaperBoat.draw(in: CGRect(x: -8, y: -11, width: 32, height: 23)); return }
             switch pose {
             case .face:
                 if let art = Self.faceArt { drawArtwork(art,centeredAt:CGPoint(x:-9,y:0),in:c) }
@@ -830,6 +838,7 @@ private final class CatCompanionView: NSView {
         let sign: Double = p<0.5 ? (facing ? -1 : 1) : (flipTo ? -1 : 1)
         let width = p<1 ? 0.18+0.82*abs(cos(.pi*p)) : 1
         c.translateBy(x:bounds.midX,y:bounds.midY); c.scaleBy(x:sign*width,y:1+0.025*sin(.pi*p)); c.translateBy(x:-bounds.midX,y:-bounds.midY)
+        if skin == .boat { PaperBoat.draw(in: bounds.insetBy(dx: 2, dy: bounds.height * 0.22)); return }
         guard let artwork else { return }
         let center = CGPoint(x:bounds.midX,y:bounds.midY)
         drawArtwork(artwork,centeredAt:center,in:c)
@@ -1019,7 +1028,7 @@ extension DesktopPetController {
         controller.expandedFrame = controller.cat.frame
         var muted = 0, opened = 0
         controller.onDismiss = { muted += 1 }; controller.onOpenMonitor = { opened += 1 }
-        let alert = MonitoringAlert(id:"fixture",title:"",message:"双肩放平",seconds:8,recovering:false)
+        let alert = BubbleMessage(id:"fixture",title:"",message:"双肩放平",seconds:8,recovering:false)
         controller.present([alert],text:"")
         precondition(controller.bubbles.count == 1)
         controller.fold(.right,screen:screen); controller.catView.finishAnimations()

@@ -7,15 +7,15 @@ import PostureCore
         Task { @MainActor in
             var time = 0.0
             let reminders = ReminderPanelController(router: DisplayRouter(), now: { time }, presentsOnScreen: false)
-            let head = MonitoringAlert(id: "posture.head", title: "歪头", message: "头向左扶正", seconds: 8, recovering: false)
-            let shoulder = MonitoringAlert(id: "posture.shoulders", title: "高低肩", message: "双肩放平", seconds: 8, recovering: false)
+            let head = BubbleMessage(id: "posture.head", title: "歪头", message: "头向左扶正", seconds: 8, recovering: false)
+            let shoulder = BubbleMessage(id: "posture.shoulders", title: "高低肩", message: "双肩放平", seconds: 8, recovering: false)
             let ids: Set<String> = [head.id, shoulder.id]
             var checks: [String] = []
             func require(_ condition: Bool, _ message: String) {
                 guard condition else { fputs("Banner check failed: \(message)\n", stderr); exit(1) }
             }
-            @MainActor func update(_ alerts: [MonitoringAlert], ongoing: Set<String>, recovered: Set<String> = [], enabled: Bool = true) {
-                reminders.synchronize(ReminderPresentationUpdate(alerts: alerts, ongoingIDs: ongoing, recoveredIDs: recovered, enabled: enabled))
+            @MainActor func update(_ alerts: [BubbleMessage], ongoing: Set<String>, recovered: Set<String> = [], enabled: Bool = true) {
+                reminders.synchronize(BubbleSnapshot(alerts: alerts, ongoingIDs: ongoing, recoveredIDs: recovered, enabled: enabled))
             }
             update([head], ongoing: [head.id])
             require(reminders.visible && reminders.snapshot["canBecomeKey"] as? Bool == false, "initial panel must remain non-key")

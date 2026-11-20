@@ -65,7 +65,7 @@ final class DiagnosticModel: ObservableObject {
         }
     }
     var onReminderEvent: ((ReminderEvent) -> Void)?
-    var onReminderAlertsChanged: ((ReminderPresentationUpdate) -> Void)?
+    var onReminderAlertsChanged: ((BubbleSnapshot) -> Void)?
     var onSettingsChanged: ((MonitorSettings, MonitorSettings) -> Void)?
     var onWindowClosed: (() -> Void)?
     private var reminderEngine = ReminderEngine()
@@ -547,7 +547,7 @@ final class DiagnosticModel: ObservableObject {
         } catch { notice = "参数文件无法读取：\(error.localizedDescription)" }
     }
     private func applyReminderResult(_ result: ReminderResult) {
-        pendingRecoveredIDs.formUnion(ReminderPresentationUpdate.recoveredPostureIDs(previous: postureChannels, current: result.channels))
+        pendingRecoveredIDs.formUnion(BubbleSnapshot.recoveredPostureIDs(previous: postureChannels, current: result.channels))
         if monitorState != result.state { monitorState = result.state }
         postureChannels = result.channels
         for event in result.events {
@@ -555,13 +555,13 @@ final class DiagnosticModel: ObservableObject {
         }
     }
     private func refreshReminderPresentation() {
-        var alerts: [MonitoringAlert] = []
+        var alerts: [BubbleMessage] = []
         if hasStarted && settings.automaticReminders && collector == nil && !oralSamples.isRecording {
             for channel in postureChannels where channel.hasReminded && channel.isUnresolved && channel.isObservable {
                 guard let kind = channel.kind else { continue }
                 let recovering: Bool
                 if case .recovering = channel.state { recovering = true } else { recovering = false }
-                alerts.append(MonitoringAlert(id: "posture." + channel.channel.rawValue,
+                alerts.append(BubbleMessage(id: "posture." + channel.channel.rawValue,
                     title: channel.channel == .head ? "歪头" : "肩线偏移", message: kind.message,
                     seconds: Int(channel.accumulatedSeconds), recovering: recovering,
                     recoveryProgress: min(1, channel.recoverySeconds / max(0.1, effectiveReminderConfiguration.recoverySeconds))))
@@ -569,7 +569,7 @@ final class DiagnosticModel: ObservableObject {
             if habitsReliable {
                 for state in habitStates where state.confirmed {
                     let message = state.kind.message
-                    alerts.append(MonitoringAlert(id: "habit." + state.kind.rawValue, title: "口部变化", message: message,
+                    alerts.append(BubbleMessage(id: "habit." + state.kind.rawValue, title: "口部变化", message: message,
                         seconds: Int(state.elapsedSeconds), recovering: state.recovering,
                         recoveryProgress: min(1, state.recoverySeconds / max(0.1, settings.tuning.recoverySeconds))))
                 }
@@ -583,7 +583,7 @@ final class DiagnosticModel: ObservableObject {
             }
             for state in habitStates where state.confirmed { ongoingIDs.insert("habit." + state.kind.rawValue) }
         }
-        onReminderAlertsChanged?(ReminderPresentationUpdate(alerts: alerts, ongoingIDs: ongoingIDs,
+        onReminderAlertsChanged?(BubbleSnapshot(alerts: alerts, ongoingIDs: ongoingIDs,
             recoveredIDs: enabled ? pendingRecoveredIDs.subtracting(ongoingIDs) : [], enabled: enabled))
         pendingRecoveredIDs = []
     }

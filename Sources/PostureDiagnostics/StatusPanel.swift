@@ -6,7 +6,7 @@ private struct StatusMenuHeader: View {
     @ObservedObject var model: DiagnosticModel
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("KukuSeat").font(.headline).frame(height: 20, alignment: .leading)
+            Text("注意坐姿").font(.headline).frame(height: 20, alignment: .leading)
             Text(model.monitorSummary).font(.callout).foregroundStyle(.secondary)
                 .lineLimit(2, reservesSpace: true).frame(maxWidth: .infinity, alignment: .topLeading)
                 .frame(height: 34, alignment: .topLeading)
@@ -69,6 +69,12 @@ private final class StatusHeaderHostingView: NSHostingView<StatusMenuHeader> {
         quit.target = NSApplication.shared; menu.addItem(quit)
         updateGeometry()
     }
+    var pluginMenu: NSMenu {
+        for item in menu.items where item === pet || item === petStatus || item.action == #selector(NSApplication.terminate(_:)) {
+            menu.removeItem(item)
+        }
+        return menu
+    }
     func attach(to item: NSStatusItem) {
         statusItem = item
         // Native status-menu presentation supplies system glass, anchoring and keyboard tracking.
@@ -80,9 +86,11 @@ private final class StatusHeaderHostingView: NSHostingView<StatusMenuHeader> {
         button.performClick(nil)
     }
     func updateGeometry() {
-        let state = desktop.petMenuPresentation
-        pet.title = state.action; pet.state = state.check
-        petStatus.attributedTitle = NSAttributedString(string:state.detail,attributes:[.font:NSFont.menuFont(ofSize:11),.foregroundColor:NSColor.secondaryLabelColor])
+        if !desktop.embedded {
+            let state = desktop.petMenuPresentation
+            pet.title = state.action; pet.state = state.check
+            petStatus.attributedTitle = NSAttributedString(string:state.detail,attributes:[.font:NSFont.menuFont(ofSize:11),.foregroundColor:NSColor.secondaryLabelColor])
+        }
         monitor.title = model.hasStarted ? "暂停监测" : "开始监测"
         pip.state = desktop.pipVisible ? .on : .off
         mirror.state = model.mirrored ? .on : .off

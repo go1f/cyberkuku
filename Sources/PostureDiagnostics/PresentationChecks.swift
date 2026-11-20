@@ -49,17 +49,17 @@ import PostureCore
 
                 var time = 0.0
                 let banner = ReminderPanelController(router: DisplayRouter(), now: { time }, presentsOnScreen: false)
-                let head = MonitoringAlert(id: "head", title: "歪头", message: "头向左扶正", seconds: 8, recovering: false)
-                banner.synchronize(ReminderPresentationUpdate(alerts: [head], ongoingIDs: [head.id]))
+                let head = BubbleMessage(id: "head", title: "歪头", message: "头向左扶正", seconds: 8, recovering: false)
+                banner.synchronize(BubbleSnapshot(alerts: [head], ongoingIDs: [head.id]))
                 try banner.renderReview(to: folder.appendingPathComponent("reminder-active.png"))
                 var recovering = head; recovering.recovering = true; recovering.recoveryProgress = 0.6
-                time = 1; banner.synchronize(ReminderPresentationUpdate(alerts: [recovering], ongoingIDs: [head.id]))
+                time = 1; banner.synchronize(BubbleSnapshot(alerts: [recovering], ongoingIDs: [head.id]))
                 try banner.renderReview(to: folder.appendingPathComponent("reminder-recovering.png"))
-                time = 2; banner.synchronize(ReminderPresentationUpdate(alerts: [], ongoingIDs: [], recoveredIDs: [head.id]))
+                time = 2; banner.synchronize(BubbleSnapshot(alerts: [], ongoingIDs: [], recoveredIDs: [head.id]))
                 try banner.renderReview(to: folder.appendingPathComponent("reminder-complete.png"))
-                time = 2.5; banner.synchronize(ReminderPresentationUpdate(alerts: [], ongoingIDs: []))
+                time = 2.5; banner.synchronize(BubbleSnapshot(alerts: [], ongoingIDs: []))
                 try banner.renderReview(to: folder.appendingPathComponent("reminder-checkmark.png"))
-                banner.synchronize(ReminderPresentationUpdate(alerts: [], ongoingIDs: [], enabled: false))
+                banner.synchronize(BubbleSnapshot(alerts: [], ongoingIDs: [], enabled: false))
                 for name in ["reminder-active.png", "reminder-recovering.png", "reminder-complete.png", "reminder-checkmark.png"] {
                     let image = NSBitmapImageRep(data: try Data(contentsOf: folder.appendingPathComponent(name)))!
                     precondition(image.colorAt(x: 0, y: 0)!.alphaComponent < 0.01, "Reminder corner became square")
@@ -90,7 +90,7 @@ import PostureCore
         @MainActor func sample(_ time: Double, roll: Double, shoulder: Double, context: String = "a") {
             let result = engine.observe(ReminderInput(timestamp: time, contextID: context, reliable: true,
                 rollDeviation: roll, shoulderDeviation: shoulder))
-            events.formUnion(ReminderPresentationUpdate.recoveredPostureIDs(previous: previous, current: result.channels))
+            events.formUnion(BubbleSnapshot.recoveredPostureIDs(previous: previous, current: result.channels))
             previous = result.channels
         }
         for i in 0..<40 { sample(Double(i)/10, roll: 10, shoulder: 15) }
@@ -103,7 +103,7 @@ import PostureCore
         for i in 80..<120 { sample(Double(i)/10, roll: 10, shoulder: 15, context: "b") }
         precondition(previous.allSatisfy(\.hasReminded))
         let reset = engine.reset()
-        precondition(ReminderPresentationUpdate.recoveredPostureIDs(previous: previous, current: reset.channels).isEmpty)
+        precondition(BubbleSnapshot.recoveredPostureIDs(previous: previous, current: reset.channels).isEmpty)
         previous = reset.channels; events = []
         for i in 120..<140 { sample(Double(i)/10, roll: 0, shoulder: 0, context: "b") }
         precondition(events.isEmpty, "Pause/reset must not be presented as confirmed recovery")

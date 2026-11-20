@@ -8,6 +8,7 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
     let model: DiagnosticModel
     let updater: AppUpdater
     let router = DisplayRouter()
+    private let sharedOutput: BubbleOutput?
     lazy var reminders: ReminderPanelController = {
         let offscreen = CommandLine.arguments.contains("--window-interaction-check") || CommandLine.arguments.contains("--presentation-check")
         let controller = ReminderPanelController(router: router,presentsOnScreen:!offscreen)
@@ -30,27 +31,39 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
     private var subscriptions: Set<AnyCancellable> = []
     private var screenObserver: NSObjectProtocol?
 
-    init(model: DiagnosticModel) {
+    var embedded: Bool { sharedOutput != nil }
+    var pluginMenu: NSMenu { statusPanel.pluginMenu }
+    init(model: DiagnosticModel, output: BubbleOutput? = nil, appUpdater: AppUpdater? = nil) {
+        sharedOutput = output
         self.model = model
-        updater = AppUpdater(enabled: CommandLine.arguments.contains("--update-qa") || !model.isDemo && !CommandLine.arguments.contains("--demo") && !CommandLine.arguments.contains("--ui-smoke") && !CommandLine.arguments.contains("--background-check") && !CommandLine.arguments.contains("--camera-check") && !CommandLine.arguments.contains("--layout-check"))
+        updater = appUpdater ?? AppUpdater(enabled: CommandLine.arguments.contains("--update-qa") || !model.isDemo && !CommandLine.arguments.contains("--demo") && !CommandLine.arguments.contains("--ui-smoke") && !CommandLine.arguments.contains("--background-check") && !CommandLine.arguments.contains("--camera-check") && !CommandLine.arguments.contains("--layout-check"))
         super.init()
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem = item
-        let source = Bundle.main.url(forResource:"StatusIcon",withExtension:"png").flatMap(NSImage.init(contentsOf:))
-        item.button?.image = source.map { AppAppearance.statusIcon(source:$0) }
-        statusPanel.attach(to: item)
-        item.button?.toolTip = "坐姿监测 · 点击查看状态，⌥点击切换画中画"
-        statusClickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
-            let consumed = MainActor.assumeIsolated {
-                guard let self, event.modifierFlags.contains(.option), let button = self.statusItem?.button,
-                      let window = button.window, event.window === window,
-                      button.bounds.contains(button.convert(event.locationInWindow, from: nil)) else { return false }
-                self.togglePiP(); return true
+        if output == nil {
+            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+            statusItem = item
+            let source = Bundle.main.url(forResource:"StatusIcon",withExtension:"png").flatMap(NSImage.init(contentsOf:))
+            item.button?.image = source.map { AppAppearance.statusIcon(source:$0) }
+            statusPanel.attach(to: item)
+            item.button?.toolTip = "坐姿监测 · 点击查看状态，⌥点击切换画中画"
+            statusClickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+                let consumed = MainActor.assumeIsolated {
+                    guard let self, event.modifierFlags.contains(.option), let button = self.statusItem?.button,
+                          let window = button.window, event.window === window,
+                          button.bounds.contains(button.convert(event.locationInWindow, from: nil)) else { return false }
+                    self.togglePiP(); return true
+                }
+                return consumed ? nil : event
             }
-            return consumed ? nil : event
         }
-        model.onReminderEvent = { [weak self] event in self?.reminders.handle(event) }
-        model.onReminderAlertsChanged = { [weak self] update in self?.reminders.synchronize(update) }
+        if let output {
+            model.onReminderEvent = { event in
+                if case .nudge(let text) = event { output.nudge(text) }
+            }
+            model.onReminderAlertsChanged = { output.publish($0) }
+        } else {
+            model.onReminderEvent = { [weak self] event in self?.reminders.handle(event) }
+            model.onReminderAlertsChanged = { [weak self] update in self?.reminders.synchronize(update) }
+        }
         model.onSettingsChanged = { [weak self] old, new in
             guard let self else { return }
             if self.pipPanel == nil {
@@ -84,7 +97,7 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
             object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated {
                 self?.placementWork?.cancel(); self?.placementWork = nil; self?.placePiP()
             } }
-        installApplicationMenu()
+        if output == nil { installApplicationMenu() }
         spaceMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             let consumed = MainActor.assumeIsolated {
                 guard let self, event.keyCode == 49,
@@ -248,12 +261,23 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
     var petMenuPresentation: PetMenuPresentation { reminders.petMenuPresentation }
     func showPet() { reminders.showPet(); statusPanel.updateGeometry() }
     @objc func togglePet() { reminders.togglePet(); statusPanel.updateGeometry() }
-    func previewReminder() { reminders.preview() }
+    func previewReminder() {
+        if let sharedOutput { sharedOutput.nudge("坐正，放松肩膀", preview: true) }
+        else { reminders.preview() }
+    }
     func shutdown() {
         flushPiPPlacement(); placementWork?.cancel()
         if let spaceMonitor { NSEvent.removeMonitor(spaceMonitor) }
         if let statusClickMonitor { NSEvent.removeMonitor(statusClickMonitor) }
-        reminders.shutdown(); statusPanel.hide(); pipPanel?.orderOut(nil)
+        model.onReminderAlertsChanged = nil
+        model.onReminderEvent = nil
+        model.onSettingsChanged = nil
+        model.onWindowClosed = nil
+        subscriptions.removeAll()
+        statusPanel.hide()
+        mainWindow?.close(); settingsWindow?.close(); pipPanel?.close()
+        if sharedOutput == nil { reminders.shutdown() }
+        else { sharedOutput?.close() }
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
     }
