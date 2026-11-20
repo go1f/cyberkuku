@@ -5,7 +5,7 @@ cd "$project_root"
 swift build --scratch-path "${KUKUSEAT_BUILD_PATH:-.build}" -c release --build-system native --product PostureDiagnostics
 swift build --scratch-path "${KUKUSEAT_BUILD_PATH:-.build}" -c release --build-system native --product KukusitUpdateInstaller
 binary_dir="$(swift build --scratch-path "${KUKUSEAT_BUILD_PATH:-.build}" -c release --build-system native --show-bin-path)"
-app_path="$project_root/dist/KukuSeat.app"
+app_path="$project_root/dist/CyberKuku.app"
 mkdir -p "$app_path/Contents/MacOS" "$app_path/Contents/Resources"
 cp "$binary_dir/PostureDiagnostics" "$app_path/Contents/MacOS/PostureDiagnostics"
 # Discard the unused Sparkle framework from earlier development builds.

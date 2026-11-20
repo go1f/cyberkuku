@@ -65,7 +65,7 @@ private final class StatusHeaderHostingView: NSHostingView<StatusMenuHeader> {
         menu.addItem(.separator())
         let settings = NSMenuItem(title: "设置…", action: #selector(DesktopCoordinator.showSettings), keyEquivalent: "")
         settings.target = desktop; menu.addItem(settings)
-        let quit = NSMenuItem(title: "退出 KukuSeat", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+        let quit = NSMenuItem(title: "退出 CyberKuku", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         quit.target = NSApplication.shared; menu.addItem(quit)
         updateGeometry()
     }

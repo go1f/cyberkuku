@@ -92,7 +92,9 @@ final class AppUpdater: NSObject, ObservableObject, NSMenuItemValidation {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("PostureDiagnostics/update-status.txt")
     }
-    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool { canCheck }
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        menuItem.action == #selector(showWindow(_:)) || canCheck
+    }
     func setAutomaticChecks(_ enabled: Bool) {
         automaticallyChecks = enabled; defaults.set(enabled, forKey: "nativeUpdateAutomatic")
         if !enabled, busy, available == nil { cancel() }
@@ -270,11 +272,11 @@ final class AppUpdater: NSObject, ObservableObject, NSMenuItemValidation {
         }
         NSApplication.shared.activate(ignoringOtherApps: true); mascotWindow?.makeKeyAndOrderFront(nil)
     }
-    private func showWindow() {
+    @objc func showWindow(_ sender: Any? = nil) {
         if updateWindow == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 580, height: 560),
                 styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
-            window.title = "cyberkuku 更新"; window.isReleasedWhenClosed = false
+            window.title = "CyberKuku 更新"; window.isReleasedWhenClosed = false
             window.contentView = NSHostingView(rootView: AppUpdateSettingsView(updater: self))
             window.center(); updateWindow = window
         }
@@ -286,7 +288,7 @@ struct AppUpdateSettingsView: View {
     @ObservedObject var updater: AppUpdater
     var body: some View {
         Form {
-            Section("cyberkuku") {
+            Section("CyberKuku") {
                 Text("版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")")
                     .contextMenu {
                         Button("和小兽打个招呼", action: updater.showMascot)
@@ -335,7 +337,7 @@ struct AppUpdateSettingsView: View {
                 Text("发现新版本后可以立即更新、稍后提醒或跳过该版本。点击“下载安装更新”后无需再次确认，下载和校验通过即安装并重新启动。镜像选择、敏感度、校准和个人示范都会保留。")
                 Text("如果正从安装镜像中运行，请先把应用拖到“应用程序”。")
                     .font(.caption).foregroundStyle(.secondary)
-                Link("查看 GitHub 发布记录", destination: URL(string: "https://github.com/go1f/kukuseat/releases")!)
+                Link("查看 GitHub 发布记录", destination: URL(string: "https://github.com/go1f/cyberkuku/releases")!)
             }
         }.formStyle(.grouped)
     }

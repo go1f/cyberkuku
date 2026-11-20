@@ -12,8 +12,11 @@ struct UpdateChecks {
         return try JSONEncoder().encode(SignedUpdateEnvelope(payload: payload.base64EncodedString(), signature: key.signature(for: payload).base64EncodedString()))
     }
     func validSignature() throws {
-        let canonical = item(url: "https://github.com/go1f/kukuseat/releases/download/v0.7.0/Kukusit-0.7.0-macOS-arm64.zip")
-        expectEqual(try UpdateManifest.verified(signed(canonical), publicKey: key.publicKey.rawRepresentation), canonical)
+        for repository in ["cyberkuku", "kukuseat"] {
+            let url = "https://github.com/go1f/\(repository)/releases/download/v0.7.0/Kukusit-0.7.0-macOS-arm64.zip"
+            let canonical = item(url: url)
+            expectEqual(try UpdateManifest.verified(signed(canonical), publicKey: key.publicKey.rawRepresentation), canonical)
+        }
         let value = item(); let result = try UpdateManifest.verified(signed(value), publicKey: key.publicKey.rawRepresentation)
         expectEqual(result, value)
         expectTrue(result.supports(os: .init(majorVersion: 27, minorVersion: 0, patchVersion: 0)))

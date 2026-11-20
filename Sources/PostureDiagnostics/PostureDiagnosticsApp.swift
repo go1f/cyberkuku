@@ -16,7 +16,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !args.contains(where: diagnostics.contains) {
             let host = CompanionHost()
             self.host = host
-            host.openHome()
             if args.contains("--show-companion") { host.appearance.pet?.showByUser() }
             return
         }
@@ -93,7 +92,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if let host { host.openHome() } else { desktop?.showMain(expandPreview: false) }; return true
+        if let host { host.posture.desktop?.showMain(expandPreview: false) }
+        else { desktop?.showMain(expandPreview: false) }
+        return true
     }
     func applicationWillTerminate(_ notification: Notification) { appearance.stop(); host?.shutdown(); desktop?.shutdown(); model?.shutdown() }
 

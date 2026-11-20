@@ -139,7 +139,7 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
         if mainWindow == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 940, height: 690),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            window.title = "KukuSeat"
+            window.title = "CyberKuku"
             window.isReleasedWhenClosed = false
             let host = NSHostingView(rootView: MonitorWindowView(model: model, desktop: self))
             host.sizingOptions = []
@@ -283,8 +283,8 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
     }
     private func installApplicationMenu() {
         let root = NSMenu()
-        let appItem = NSMenuItem(title: "KukuSeat", action: nil, keyEquivalent: "")
-        let menu = NSMenu(title: "KukuSeat")
+        let appItem = NSMenuItem(title: "CyberKuku", action: nil, keyEquivalent: "")
+        let menu = NSMenu(title: "CyberKuku")
         let settings = NSMenuItem(title: "设置…", action: #selector(showSettings), keyEquivalent: ",")
         settings.target = self; menu.addItem(settings)
         let status = NSMenuItem(title: "显示菜单栏状态", action: #selector(togglePopover), keyEquivalent: "M")
@@ -298,7 +298,7 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
         update.target = updater; menu.addItem(update)
         updater.$canCheck.receive(on: RunLoop.main).sink { update.isEnabled = $0 }.store(in: &subscriptions)
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "退出 KukuSeat", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "退出 CyberKuku", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         appItem.submenu = menu; root.addItem(appItem)
         let fileItem = NSMenuItem(title: "文件", action: nil, keyEquivalent: "")
         let file = NSMenu(title: "文件")

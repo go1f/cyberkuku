@@ -1,6 +1,5 @@
 import AppKit
 import AVFoundation
-import SwiftUI
 
 enum CompanionSkin: String, CaseIterable {
     case cat, boat
@@ -28,17 +27,7 @@ enum PaperBoat {
 }
 
 @MainActor
-protocol CompanionPlugin: AnyObject {
-    var id: String { get }
-    var title: String { get }
-    var defaultEnabled: Bool { get }
-    func activate()
-    func deactivate()
-}
-
-@MainActor
-final class AppearancePlugin: CompanionPlugin {
-    let id = "appearance", title = "桌面形象", defaultEnabled = true
+final class AppearancePlugin {
     private let output: ReminderPanelController
     private let defaults: UserDefaults
     private let presentsOnScreen: Bool
@@ -52,7 +41,7 @@ final class AppearancePlugin: CompanionPlugin {
     }
     func activate() {
         guard pet == nil else { return }
-        let companion = DesktopPetController(defaults: defaults, presentsOnScreen: presentsOnScreen)
+        let companion = DesktopPetController(defaults: defaults, presentsOnScreen: presentsOnScreen, allowsHiding: false)
         companion.useSkin(skin)
         pet = companion
         output.attachCompanion(companion)
@@ -61,8 +50,8 @@ final class AppearancePlugin: CompanionPlugin {
 }
 
 @MainActor
-final class PosturePlugin: CompanionPlugin {
-    let id = "posture", title = "注意坐姿", defaultEnabled = false
+final class PosturePlugin {
+    let id = "posture", title = "注意坐姿"
     private let output: BubbleHub
     private let updater: AppUpdater
     private(set) var desktop: DesktopCoordinator?
@@ -81,21 +70,17 @@ final class PosturePlugin: CompanionPlugin {
 }
 
 @MainActor
-final class CompanionHost: NSObject, ObservableObject, NSMenuDelegate {
+final class CompanionHost: NSObject {
     let output: ReminderPanelController
     let bubbles: BubbleHub
     let appearance: AppearancePlugin
     let posture: PosturePlugin
     let updater: AppUpdater
     private let defaults: UserDefaults
-    let plugins: [CompanionPlugin]
-    @Published private(set) var enabled = Set<String>()
-    @Published var previewSkin: CompanionSkin?
-    @Published var showingAbilities = false
-    private var window: NSWindow?
     private var statusItem: NSStatusItem?
-    private let statusMenu = NSMenu()
-    private var visibilityItem: NSMenuItem?
+    let statusMenu = NSMenu()
+    private let shapeMenu = NSMenu(title: "切换形象")
+    private let appMenu = NSMenu(title: "CyberKuku")
 
     init(defaults: UserDefaults = .standard, presentsOnScreen: Bool = true) {
         self.defaults = defaults
@@ -106,17 +91,11 @@ final class CompanionHost: NSObject, ObservableObject, NSMenuDelegate {
         self.updater = updater
         appearance = AppearancePlugin(output: output, defaults: defaults, presentsOnScreen: presentsOnScreen)
         posture = PosturePlugin(output: bubbles, updater: updater)
-        plugins = [appearance, posture]
         super.init()
-        output.onOpenMonitor = { [weak self] in
-            guard let self else { return }
-            if let desktop = self.posture.desktop { desktop.openMain() } else { self.openHome() }
-        }
-        output.onPetVisibilityChanged = { [weak self] in self?.refreshVisibility() }
-        for plugin in plugins where defaults.object(forKey: "plugins." + plugin.id) as? Bool ?? plugin.defaultEnabled {
-            plugin.activate()
-            enabled.insert(plugin.id)
-        }
+        output.onOpenMonitor = { [weak self] in self?.posture.desktop?.openMain() }
+        appearance.activate()
+        if defaults.bool(forKey: "plugins.posture") { posture.activate() }
+        rebuildStatusMenu()
         if presentsOnScreen {
             if let model = posture.desktop?.model, model.settings.resumeOnLaunch, !model.profiles.isEmpty,
                AVCaptureDevice.authorizationStatus(for: .video) == .authorized {
@@ -126,77 +105,75 @@ final class CompanionHost: NSObject, ObservableObject, NSMenuDelegate {
             if let url = Bundle.main.url(forResource: "StatusIcon", withExtension: "png"), let icon = NSImage(contentsOf: url) {
                 item.button?.image = AppAppearance.statusIcon(source: icon)
             }
-            item.button?.toolTip = "cyberkuku"
+            item.button?.toolTip = "CyberKuku"
             statusItem = item
             item.menu = statusMenu
-            statusMenu.delegate = self
-            rebuildMenus()
+            installApplicationMenu()
         }
     }
-    func setEnabled(_ plugin: CompanionPlugin, _ value: Bool) {
-        guard enabled.contains(plugin.id) != value else { return }
-        if value { plugin.activate(); enabled.insert(plugin.id) }
-        else { plugin.deactivate(); enabled.remove(plugin.id) }
-        defaults.set(value, forKey: "plugins." + plugin.id)
-        if statusItem != nil { rebuildMenus() }
+
+    @objc func togglePosture() {
+        let enable = posture.desktop == nil
+        if enable { posture.activate() } else { posture.deactivate() }
+        defaults.set(enable, forKey: "plugins.posture")
+        rebuildStatusMenu()
+    }
+
+    @objc private func selectSkin(_ item: NSMenuItem) {
+        guard let name = item.representedObject as? String, let skin = CompanionSkin(rawValue: name) else { return }
+        adopt(skin)
     }
     func adopt(_ skin: CompanionSkin) {
-        objectWillChange.send()
         appearance.skin = skin
-        refreshVisibility()
-    }
-    func menuWillOpen(_ menu: NSMenu) { refreshVisibility() }
-    private func refreshVisibility() {
-        let state = output.petMenuPresentation
-        visibilityItem?.title = state.action.replacingOccurrences(of: "小灰猫", with: appearance.skin.title)
-        visibilityItem?.state = state.check
-    }
-    @objc private func togglePet() { output.togglePet() }
-    @objc func openHome() { showingAbilities = false; showWindow() }
-    @objc func openAbilities() { showingAbilities = true; showWindow() }
-    private func showWindow() {
-        if window == nil {
-            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 410),
-                             styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
-            w.title = "cyberkuku"; w.isReleasedWhenClosed = false
-            let view = NSHostingView(rootView: CompanionHome(host: self))
-            view.sizingOptions = []
-            w.contentView = view
-            w.center()
-            window = w
+        for item in shapeMenu.items {
+            item.state = item.representedObject as? String == skin.rawValue ? .on : .off
         }
-        NSApp.activate(ignoringOtherApps: true)
-        window?.deminiaturize(nil)
-        window?.makeKeyAndOrderFront(nil)
     }
-    private func rebuildMenus() {
-        // An NSMenu can belong to only one parent. Detach the plugin contribution before rebuilding.
+
+    @discardableResult
+    private func addItem(_ menu: NSMenu, _ title: String, _ action: Selector, _ target: AnyObject, key: String = "") -> NSMenuItem {
+        let row = menu.addItem(withTitle: title, action: action, keyEquivalent: key)
+        row.target = target
+        return row
+    }
+
+    private func rebuildStatusMenu() {
         statusMenu.items.forEach { $0.submenu = nil }
         statusMenu.removeAllItems()
-        func item(_ menu: NSMenu, _ title: String, _ action: Selector, _ target: AnyObject, _ key: String = "") -> NSMenuItem {
-            let row = menu.addItem(withTitle: title, action: action, keyEquivalent: key)
-            row.target = target
-            return row
+        shapeMenu.removeAllItems()
+        for skin in CompanionSkin.allCases {
+            let row = addItem(shapeMenu, skin.title, #selector(selectSkin(_:)), self)
+            row.representedObject = skin.rawValue
+            row.state = appearance.skin == skin ? .on : .off
         }
-        _ = item(statusMenu, "打开伙伴", #selector(openHome), self)
-        visibilityItem = enabled.contains(appearance.id) ? item(statusMenu, "", #selector(togglePet), self) : nil
-        refreshVisibility()
+        let shapes = NSMenuItem(title: shapeMenu.title, action: nil, keyEquivalent: "")
+        shapes.submenu = shapeMenu
+        statusMenu.addItem(shapes)
         if let desktop = posture.desktop {
+            let menu = desktop.pluginMenu
+            if !menu.items.contains(where: { $0.action == #selector(togglePosture) }) {
+                menu.addItem(.separator())
+                let disable = addItem(menu, "停用注意坐姿", #selector(togglePosture), self)
+                disable.isEnabled = true
+            }
             let row = NSMenuItem(title: posture.title, action: nil, keyEquivalent: "")
-            row.submenu = desktop.pluginMenu
+            row.submenu = menu
             statusMenu.addItem(row)
+        } else {
+            addItem(statusMenu, "启用注意坐姿", #selector(togglePosture), self)
         }
         statusMenu.addItem(.separator())
-        _ = item(statusMenu, "管理能力…", #selector(openAbilities), self)
-        _ = item(statusMenu, "退出 cyberkuku", #selector(NSApplication.terminate(_:)), NSApp)
-        let root = NSMenu(), app = NSMenu(title: "cyberkuku"), file = NSMenu(title: "文件")
-        let appItem = NSMenuItem(); appItem.submenu = app; root.addItem(appItem)
-        _ = item(app, "伙伴设置…", #selector(openAbilities), self, ",")
-        _ = item(app, "检查更新…", #selector(AppUpdater.checkForUpdates(_:)), updater)
-        app.addItem(.separator())
-        _ = item(app, "退出 cyberkuku", #selector(NSApplication.terminate(_:)), NSApp, "q")
+        addItem(statusMenu, "应用更新…", #selector(AppUpdater.showWindow(_:)), updater)
+        addItem(statusMenu, "退出 CyberKuku", #selector(NSApplication.terminate(_:)), NSApp)
+    }
+
+    private func installApplicationMenu() {
+        let root = NSMenu(), file = NSMenu(title: "文件")
+        let appItem = NSMenuItem(); appItem.submenu = appMenu; root.addItem(appItem)
+        addItem(appMenu, "应用更新…", #selector(AppUpdater.showWindow(_:)), updater)
+        appMenu.addItem(.separator())
+        addItem(appMenu, "退出 CyberKuku", #selector(NSApplication.terminate(_:)), NSApp, key: "q")
         let fileItem = NSMenuItem(); fileItem.submenu = file; root.addItem(fileItem)
-        file.addItem(withTitle: "打开伙伴", action: #selector(openHome), keyEquivalent: "0").target = self
         file.addItem(withTitle: "关闭窗口", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         let editItem = NSMenuItem()
         let edit = NSMenu(title: "编辑")
@@ -208,63 +185,11 @@ final class CompanionHost: NSObject, ObservableObject, NSMenuDelegate {
         NSApp.mainMenu = root
     }
     func shutdown() {
-        plugins.reversed().filter { enabled.contains($0.id) }.forEach { $0.deactivate() }
-        enabled.removeAll()
-        window?.close()
-        window = nil
+        posture.deactivate()
+        appearance.deactivate()
         output.shutdown()
+        statusMenu.removeAllItems()
         if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
         statusItem = nil
-    }
-}
-
-private struct CompanionHome: View {
-    @ObservedObject var host: CompanionHost
-    var body: some View {
-        VStack(spacing: 20) {
-            Picker("页面", selection: $host.showingAbilities) {
-                Text("伙伴").tag(false)
-                Text("能力").tag(true)
-            }.pickerStyle(.segmented).labelsHidden().frame(width: 184)
-            if host.showingAbilities {
-                Form {
-                    ForEach(host.plugins, id: \.id) { plugin in
-                        Toggle(plugin.title, isOn: Binding(get: { host.enabled.contains(plugin.id) },
-                            set: { host.setEnabled(plugin, $0) })).toggleStyle(.switch)
-                    }
-                    if let posture = host.posture.desktop {
-                        Button("打开监测窗口", action: posture.openMain)
-                        Button("坐姿设置…", action: posture.showSettings)
-                        Button("预览提醒", action: posture.previewReminder)
-                    }
-                }.formStyle(.grouped)
-            } else {
-                Spacer()
-                if host.enabled.contains(host.appearance.id) {
-                    let skin = host.previewSkin ?? host.appearance.skin
-                    if skin == .cat, let url = Bundle.main.url(forResource: "Companion", withExtension: "png"),
-                       let image = NSImage(contentsOf: url) {
-                        Image(nsImage: image).resizable().scaledToFit().frame(height: 155)
-                    } else if skin == .boat {
-                        Image(nsImage: NSImage(size: NSSize(width: 112, height: 80), flipped: false) { rect in PaperBoat.draw(in: rect); return true })
-                            .frame(height: 155)
-                    }
-                    Text(skin.title).font(.title2)
-                    HStack {
-                        Picker("形象", selection: Binding(get: { host.previewSkin ?? host.appearance.skin }, set: { host.previewSkin = $0 })) {
-                            ForEach(CompanionSkin.allCases, id: \.self) { Text($0.title).tag($0) }
-                        }.frame(width: 150)
-                        Button("采用") { host.adopt(skin); host.previewSkin = nil }.disabled(skin == host.appearance.skin)
-                        if skin != host.appearance.skin {
-                            Button("取消") { host.previewSkin = nil }
-                        }
-                    }
-                } else {
-                    Text("桌面形象已关闭").foregroundStyle(.secondary)
-                    Button("管理能力", action: host.openAbilities)
-                }
-                Spacer()
-            }
-        }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(20)
     }
 }

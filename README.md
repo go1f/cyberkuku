@@ -1,10 +1,10 @@
-# cyberkuku · 桌面电子伙伴
+# CyberKuku · 桌面电子伙伴
 
-默认的小灰猫可以独立留在桌面。打开「能力」可启停桌面形象和「注意坐姿」。坐姿插件使用 MacBook 内置摄像头进行本地分析，提醒通过宿主气泡显示。面向笔记本敞开、外接显示器位于上方的工作情境，不需要外接摄像头或手机。
+默认的小灰猫可以独立留在桌面。从菜单栏可切换形象、启停「注意坐姿」或打开应用更新。坐姿插件使用 MacBook 内置摄像头进行本地分析，提醒通过宿主气泡显示。面向笔记本敞开、外接显示器位于上方的工作情境，不需要外接摄像头或手机。
 
 ## 安装
 
-从 [GitHub 最新发行版](https://github.com/go1f/kukuseat/releases/latest) 下载 macOS arm64 DMG，打开后把 `cyberkuku.app` 拖到 Applications。也提供 ZIP。安装后可从“应用程序”、Spotlight 或 Dock 启动，菜单栏入口继续保留。
+从 [GitHub 最新发行版](https://github.com/go1f/cyberkuku/releases/latest) 下载 macOS arm64 DMG，打开后把 `CyberKuku.app` 拖到 Applications。也提供 ZIP。安装后可从“应用程序”、Spotlight 或 Dock 启动，菜单栏入口继续保留。
 
 发行包包含原生界面、本地 MediaPipe 推理运行时和模型，**无需安装 Python、无需克隆项目，也不需要联网推理**。目标为 Apple Silicon Mac，包括 M5 / macOS 27；当前已在 M2 / macOS 27 验证，尚未在 M5 实机测试。
 
@@ -47,13 +47,13 @@ zsh scripts/create_dmg.sh
 zsh scripts/install_app.sh
 ```
 
-输出为 `release/KukuSeat.app` 和可下载的 ZIP。`build_release.sh` 将 Python 运行时冻结到应用内，配置中不保留开发机器的 Python 绝对路径。
+输出为 `release/CyberKuku.app` 和可下载的 ZIP。`build_release.sh` 将 Python 运行时冻结到应用内，配置中不保留开发机器的 Python 绝对路径。
 
 开发界面版本可使用 `zsh scripts/build_app.sh --demo`。实际 Release 包通过以下检查：
 
 ```sh
 swift run --build-system native PostureCoreChecks
-release/KukuSeat.app/Contents/MacOS/PostureDiagnostics --bridge-check
+release/CyberKuku.app/Contents/MacOS/PostureDiagnostics --bridge-check
 ```
 
 核心检查无需 XCTest 或完整 Xcode。当前 Swift 6.4 的原生构建参数用于仅有 Command Line Tools 的环境，会提示未来弃用；尚未对其它构建工具版本做保证。
@@ -95,7 +95,7 @@ release/KukuSeat.app/Contents/MacOS/PostureDiagnostics --bridge-check
 
 ### 自动检查和更新
 
-0.7.0 起可在应用菜单或“设置 → 应用更新”检查新版，默认每天自动检查。点击“下载安装更新”后显示真实下载进度，下载和校验通过即自动安装并重新启动，无需再次确认。0.6.x 需要手动安装一次最新版。更新保留镜像、敏感度、校准与个人示范。发布维护见 [更新说明](docs/updating.md)。
+从状态栏或应用主菜单的「应用更新」可检查新版，默认每天自动检查。点击“下载安装更新”后显示真实下载进度，下载和校验通过即自动安装并重新启动，无需再次确认。0.6.x 需要手动安装一次最新版。更新保留镜像、敏感度、校准与个人示范。发布维护见 [更新说明](docs/updating.md)。
 
 ### 日常交互
 
@@ -103,4 +103,4 @@ release/KukuSeat.app/Contents/MacOS/PostureDiagnostics --bridge-check
 
 提示仅保留简短动作文字，单条约 40 点高。圆角固定，同一轮提示只平滑扩展，不随状态来回缩小。只连接一个显示器时，黑色胶囊上移至屏幕顶部中央：有刘海时贴在刘海下方，无刘海时贴近顶部，并柔和展开、收拢。多屏时继续跟随工作显示器，显示在菜单栏下方。点击即可收起，不会暂停监测或抢走键盘焦点。
 
-菜单栏使用原生左对齐菜单，状态区域固定行高，提供镜像开关；更新入口在应用菜单及“设置 → 应用更新”。监控窗口的“双画面对照”开关默认关闭，打开后上方显示非镜像、下方显示镜像，共用摄像头输入与姿态分析。开关会保存；状态说明变化不调整窗口大小。
+「注意坐姿」使用原生子菜单，状态区域固定行高，提供镜像开关；更新入口在状态栏及应用主菜单的一级「应用更新」。监控窗口的“双画面对照”开关默认关闭，打开后上方显示非镜像、下方显示镜像，共用摄像头输入与姿态分析。开关会保存；状态说明变化不调整窗口大小。

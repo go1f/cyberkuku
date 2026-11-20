@@ -64,11 +64,11 @@ struct PetMenuPresentation: Equatable {
     private var lastCatFrame = CGRect.zero, lastArea = CGRect.zero
     private var layoutSeed = Int.random(in:0..<8)
     private var reduced: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
-    init(defaults: UserDefaults = .standard,presentsOnScreen: Bool = true,coveredDisplays: @escaping @MainActor () -> Set<CGDirectDisplayID> = { PetFullscreenMonitor.coveredDisplays() }) {
+    init(defaults: UserDefaults = .standard,presentsOnScreen: Bool = true,allowsHiding: Bool = true,coveredDisplays: @escaping @MainActor () -> Set<CGDirectDisplayID> = { PetFullscreenMonitor.coveredDisplays() }) {
         self.defaults = defaults; self.presentsOnScreen = presentsOnScreen; self.displayCoverage = coveredDisplays
-        hidden = defaults.bool(forKey:"desktopPet.hidden")
-        manuallyShown = defaults.bool(forKey:"desktopPet.manuallyShown")
-        configure(cat); cat.title = "KukuSeat 小灰猫"
+        hidden = allowsHiding && defaults.bool(forKey:"desktopPet.hidden")
+        manuallyShown = allowsHiding && defaults.bool(forKey:"desktopPet.manuallyShown")
+        configure(cat); cat.title = "CyberKuku 小灰猫"
         catView = CatCompanionView(frame:NSRect(origin:.zero,size:cat.frame.size))
         catView.onClick = { [weak self] in
             guard let self else { return }
@@ -79,7 +79,7 @@ struct PetMenuPresentation: Equatable {
         catView.onDoubleClick = { [weak self] in self?.onOpenMonitor() }
         catView.onPress = { [weak self] point in self?.capturePress(at:point) }
         catView.onMove = { [weak self] point, finished in self?.move(point,finished:finished) }
-        catView.onHide = { [weak self] in self?.hideByUser() }
+        if allowsHiding { catView.onHide = { [weak self] in self?.hideByUser() } }
         catView.onInteraction = { [weak self] in self?.updateRotation(); self?.ensureTimer() }
         cat.contentView = catView
         screenObserver = NotificationCenter.default.addObserver(forName:NSApplication.didChangeScreenParametersNotification,object:nil,queue:.main) { [weak self] _ in
@@ -142,7 +142,7 @@ struct PetMenuPresentation: Equatable {
     var userHidden: Bool { hidden }
     func useSkin(_ skin: CompanionSkin) {
         catView.skin = skin
-        cat.title = "cyberkuku " + skin.title
+        cat.title = "CyberKuku " + skin.title
         catView.setAccessibilityLabel(skin.title + "，双击打开伙伴或监测窗口，拖到左右边缘收纳")
     }
     private var wantsVisible: Bool { !hidden && (enabled || manuallyShown) }
@@ -325,7 +325,14 @@ struct PetMenuPresentation: Equatable {
         order.removeAll { !ids.contains($0) }
         var added = 0
         for (id,message,recovering,resolved) in items {
-            if let (_,view) = bubbles[id] { view.update(message:message,recovering:recovering,resolved:resolved) }
+            if let (panel, view) = bubbles[id] {
+                view.update(message: message, recovering: recovering, resolved: resolved)
+                let size = view.preferredSize
+                if panel.frame.size != size {
+                    stableFrames[id] = nil
+                    panel.setContentSize(size)
+                }
+            }
             else {
                 let view = ComicBubbleView(message:message,delay:Double(added)*0.65)
                 view.update(message:message,recovering:recovering,resolved:resolved)
@@ -562,7 +569,8 @@ private final class CatCompanionView: NSView {
     var pointerLocation: () -> CGPoint = { NSEvent.mouseLocation }
     var isPressed: Bool { pressed }
     var hasPendingClick: Bool { singleClickWork != nil }
-    var onHide: () -> Void = {}, onInteraction: () -> Void = {}
+    var onHide: (() -> Void)?
+    var onInteraction: () -> Void = {}
     private var singleClickWork: DispatchWorkItem?
     private var down = NSPoint.zero
     private var dragging = false, hovered = false, pressed = false
@@ -587,7 +595,7 @@ private final class CatCompanionView: NSView {
     private static func piece(_ rect: CGRect) -> CGImage? { original?.cropping(to:rect)?.copy(maskingColorComponents:[245,255,245,255,245,255]) }
     private let artwork = CatCompanionView.piece(CGRect(x:220,y:40,width:540,height:910))
     private static let artworkScale = (PetPlacement.companionSize.height-2*8*0.6)/910
-    private static let edgeDetailMagnification: CGFloat = 2.4
+    private static let edgeDetailMagnification: CGFloat = 1.44
 
     private func drawArtwork(_ art: CGImage, centeredAt center: CGPoint, in context: CGContext, magnification: CGFloat = 1) {
         let scale = Self.artworkScale*magnification
@@ -605,7 +613,7 @@ private final class CatCompanionView: NSView {
         context.draw(art,in:CGRect(x:0,y:0,width:width,height:height))
         let pixels = UnsafeMutableBufferPointer(start:data.assumingMemoryBound(to:UInt8.self),count:rowBytes*height)
         let source = Array(pixels)
-        let radius = 4
+        let radius = 2
         let offsets = (-radius...radius).flatMap { y in
             (-radius...radius).filter { x in x*x+y*y <= radius*radius }.map { x in (x,y) }
         }
@@ -627,7 +635,7 @@ private final class CatCompanionView: NSView {
                     let sampleX = min(width-1,max(0,x+dx)), sampleY = min(height-1,max(0,y+dy))
                     let neighbor = sampleY*rowBytes+sampleX*4
                     let sampleLight = brightness(at:neighbor)
-                    if dx*dx+dy*dy <= 9 {
+                    if dx*dx+dy*dy <= 1 {
                         alpha = min(alpha,Int(source[neighbor+3]))
                         innerLight = max(innerLight,sampleLight)
                     }
@@ -689,7 +697,7 @@ private final class CatCompanionView: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override init(frame:NSRect) {
         super.init(frame:frame)
-        setAccessibilityLabel("KukuSeat 小灰猫，双击打开监控窗口，拖动到左右边缘收纳")
+        setAccessibilityLabel("CyberKuku 小灰猫，双击打开监控窗口，拖动到左右边缘收纳")
         updateHelp()
     }
     required init?(coder:NSCoder) { fatalError() }
@@ -744,12 +752,13 @@ private final class CatCompanionView: NSView {
         pressed = false; dragging = false; interactionChanged()
     }
     override func rightMouseDown(with event:NSEvent) {
+        guard onHide != nil else { return }
         cancelPendingClick(); pressed = true; interactionChanged()
         let menu = NSMenu(); let item = NSMenuItem(title:"隐藏" + skin.title + "（可从菜单栏找回）",action:#selector(hidePet),keyEquivalent:"")
         item.target = self; menu.addItem(item); NSMenu.popUpContextMenu(menu,with:event,for:self)
         pressed = false; interactionChanged()
     }
-    @objc private func hidePet() { onHide() }
+    @objc private func hidePet() { onHide?() }
     private func updateHelp() {
         if fullScreenCompact { toolTip = "靠近探出，单击展开固定；双击打开监控窗口"; return }
         toolTip = folded == nil ? "单击安静 30 秒；双击打开监控窗口；拖到左右边缘收纳" : "单击展开；双击打开监控窗口；可拖回桌面" }
@@ -817,7 +826,7 @@ private final class CatCompanionView: NSView {
                 if let art = Self.faceArt { drawArtwork(art,centeredAt:CGPoint(x:-9,y:0),in:c) }
             case .hand:
                 // The open end stays at the edge; the rounded original hand reaches inward.
-                c.translateBy(x:11.2,y:0); c.rotate(by:.pi/2)
+                c.translateBy(x:6.72,y:0); c.rotate(by:.pi/2)
                 if let art = Self.handArt { drawArtwork(art,centeredAt:.zero,in:c,magnification:Self.edgeDetailMagnification) }
             case .ears:
                 // Turn the original pair around the forehead, with the head behind the edge.
@@ -859,27 +868,71 @@ private final class ComicBubbleView: NSView {
     var onClick: () -> Void = {}
     var target = CGPoint.zero { didSet { if oldValue != target { needsDisplay = true } } }
     private var message: String
+    private var lettering: Lettering
+    var preferredSize: NSSize { lettering.size }
     private var recovering = false, resolved = false
     private let born: Double
     private let tilt = Double.random(in: -0.025...0.025)
     var finishedInflating: Bool { ProcessInfo.processInfo.systemUptime >= born+1.8 }
     init(message: String, delay: Double) {
-        self.message = message; born = ProcessInfo.processInfo.systemUptime + delay
-        super.init(frame: NSRect(x: 0, y: 0, width: Self.size(message).width, height: Self.size(message).height))
+        self.message = message
+        let lettering = Lettering(message)
+        self.lettering = lettering
+        born = ProcessInfo.processInfo.systemUptime + delay
+        super.init(frame: NSRect(origin: .zero, size: lettering.size))
         toolTip = "点击收起所有提示，30 秒内不再提醒"
     }
     required init?(coder: NSCoder) { fatalError() }
-    static func lines(_ text: String) -> String {
-        guard text.count > 4, !text.contains("\n") else { return text }
-        let middle = text.index(text.startIndex, offsetBy: (text.count+1)/2)
-        return String(text[..<middle])+"\n　"+text[middle...]
-    }
-    static func size(_ text: String) -> NSSize {
-        let size = (lines(text) as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 14)])
-        return NSSize(width: min(240,max(80,ceil(size.width)+36)), height: max(64,ceil(size.height)+36))
+
+    private struct Lettering {
+        private static let font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        private static let lineHeight = ceil(font.ascender - font.descender + font.leading)
+        private static let lineGap: CGFloat = 4
+        private static let ink: [NSAttributedString.Key: Any] = [
+            .font: font, .foregroundColor: NSColor(white: 0.15, alpha: 1)
+        ]
+        let lines: [String]
+        let size: NSSize
+
+        init(_ text: String) {
+            // Keep the instruction's subject and action intact in the common two-line messages.
+            let preferred = ["头向左扶正": ["头向左", "扶正"],
+                             "头向右扶正": ["头向右", "扶正"],
+                             "手离开嘴唇": ["手离开", "嘴唇"],
+                             "手离开嘴巴": ["手离开", "嘴巴"]]
+            lines = preferred[text] ?? text.split(whereSeparator: \.isNewline).flatMap { line in
+                let characters = Array(line.trimmingCharacters(in: .whitespaces))
+                return stride(from: 0, to: characters.count, by: 8).map { start in
+                    String(characters[start..<min(start + 8, characters.count)])
+                }
+            }
+            let widest = lines.map { ($0 as NSString).size(withAttributes: Self.ink).width }.max() ?? 0
+            let height = CGFloat(lines.count) * (Self.lineHeight + Self.lineGap) - Self.lineGap
+            // Keep room for the recovery mark without changing the bubble size.
+            size = NSSize(width: max(88, ceil(widest) + 64), height: max(68, height + 54))
+        }
+
+        func draw(in body: NSRect, resolved: Bool) {
+            let advance = Self.lineHeight + Self.lineGap
+            let textHeight = CGFloat(lines.count) * advance - Self.lineGap
+            let top = body.midY + textHeight / 2
+            for (index, line) in lines.enumerated() {
+                let text = NSMutableAttributedString(string: line, attributes: Self.ink)
+                if resolved && index == lines.count - 1 {
+                    var attributes = Self.ink
+                    attributes[.foregroundColor] = NSColor.systemGreen
+                    text.append(NSAttributedString(string: " ✓", attributes: attributes))
+                }
+                let offset: CGFloat = lines.count == 2 ? (index == 0 ? -5 : 5) : 0
+                let x = body.midX + offset - text.size().width / 2
+                let y = top - Self.lineHeight - CGFloat(index) * advance
+                text.draw(at: NSPoint(x: x, y: y))
+            }
+        }
     }
     func update(message: String, recovering: Bool, resolved: Bool) {
         guard self.message != message || self.recovering != recovering || self.resolved != resolved else { return }
+        if self.message != message { lettering = Lettering(message) }
         self.message = message; self.recovering = recovering; self.resolved = resolved; needsDisplay = true
         setAccessibilityLabel(message + (resolved ? "，已恢复" : recovering ? "，正在恢复" : ""))
     }
@@ -910,9 +963,7 @@ private final class ComicBubbleView: NSView {
         path.line(to: PetPlacement.tailTip(body:b,bounds:bounds,target:localTarget)); path.close()
         NSColor.white.setFill(); path.fill()
         (resolved ? NSColor.systemGreen : NSColor(white: recovering ? 0.4 : 0.25,alpha:1)).setStroke(); path.lineWidth = 1.15; path.stroke()
-        let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center
-        let text = Self.lines(message)+(resolved ? " ✓" : "")
-        (text as NSString).draw(in: b.insetBy(dx: 5,dy: 5), withAttributes: [.font: NSFont.systemFont(ofSize:14), .foregroundColor:NSColor(white:0.15,alpha:1), .paragraphStyle:paragraph])
+        lettering.draw(in: b, resolved: resolved)
     }
 }
 
