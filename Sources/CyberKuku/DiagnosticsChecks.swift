@@ -10,7 +10,7 @@ enum DiagnosticsChecks {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         var settings = MonitorSettings.load(defaults: defaults)
-        precondition(!settings.mirrored && settings.sensitivity == .balanced)
+        precondition(!settings.mirrored && settings.sensitivity == .balanced && settings.companionDoubleClickOpensPreview)
         let presets: [(PostureSensitivity, Double, Double, Double)] = [
             (.high, 3, 2, 6), (.balanced, 5, 3, 8), (.relaxed, 10, 5, 10)
         ]
@@ -21,13 +21,14 @@ enum DiagnosticsChecks {
             let (sensitivity, delay, head, shoulder) = preset
             settings.sensitivity = sensitivity
             settings.mirrored = index.isMultiple(of: 2)
+            settings.companionDoubleClickOpensPreview = !settings.mirrored
             settings.save(defaults: defaults)
             let restored = MonitorSettings.load(defaults: defaults)
             precondition(restored == settings && restored.sensitivity == sensitivity)
             precondition(restored.tuning.sustainedSeconds == delay && restored.tuning.headEnterDegrees == head
                          && restored.tuning.shoulderEnterDegrees == shoulder)
         }
-        print("PASS settings: sensitivity presets, preview preferences and PiP placement")
+        print("PASS settings: sensitivity presets, preview and double-click preferences, PiP placement")
     }
     static func pipeline() {
         do {

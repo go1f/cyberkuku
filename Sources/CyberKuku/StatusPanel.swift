@@ -1,28 +1,5 @@
 import AppKit
-import SwiftUI
 import PostureCore
-
-private struct StatusMenuHeader: View {
-    @ObservedObject var model: DiagnosticModel
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("同学请注意坐姿！").font(.headline).frame(height: 20, alignment: .leading)
-            Text(model.monitorSummary).font(.callout).foregroundStyle(.secondary)
-                .lineLimit(2, reservesSpace: true).frame(maxWidth: .infinity, alignment: .topLeading)
-                .frame(height: 34, alignment: .topLeading)
-            Text(model.monitorDetail ?? " ").font(.caption).foregroundStyle(.secondary)
-                .lineLimit(2, reservesSpace: true).frame(maxWidth: .infinity, alignment: .topLeading)
-                .frame(height: 30, alignment: .topLeading)
-        }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .frame(width: 300, height: 112, alignment: .topLeading)
-        .transaction { $0.animation = nil }
-    }
-}
-
-private final class StatusHeaderHostingView: NSHostingView<StatusMenuHeader> {
-    override var isOpaque: Bool { false }
-}
 
 @MainActor final class StatusPanelController: NSObject, NSMenuDelegate {
     private let menu = NSMenu(title: "坐姿监测")
@@ -40,12 +17,7 @@ private final class StatusHeaderHostingView: NSHostingView<StatusMenuHeader> {
     init(model: DiagnosticModel, desktop: DesktopCoordinator) {
         self.model = model; self.desktop = desktop
         super.init()
-        menu.delegate = self; menu.autoenablesItems = false; menu.minimumWidth = 300; menu.showsStateColumn = true
-        let header = NSMenuItem(); header.isEnabled = false
-        let host = StatusHeaderHostingView(rootView: StatusMenuHeader(model: model))
-        host.sizingOptions = []; host.frame = NSRect(x: 0, y: 0, width: 300, height: 112)
-        host.wantsLayer = true; host.layer?.backgroundColor = NSColor.clear.cgColor
-        header.view = host; menu.addItem(header); menu.addItem(.separator())
+        menu.delegate = self; menu.autoenablesItems = false; menu.showsStateColumn = true
         let open = NSMenuItem(title: "打开监测窗口", action: #selector(DesktopCoordinator.openMain), keyEquivalent: "")
         open.target = desktop; menu.addItem(open)
         if !desktop.embedded {
@@ -123,8 +95,7 @@ private final class StatusHeaderHostingView: NSHostingView<StatusMenuHeader> {
     }
     var snapshot: [String: Any] {
         ["visible": visible, "nativeMenu": true, "systemAnchored": statusItem?.menu === menu,
-         "headerOpaque": menu.items.first?.view?.isOpaque ?? true,
-         "headerHeight": menu.items.first?.view?.frame.height ?? 0,
+         "hasCustomRows": menu.items.contains { $0.view != nil },
          "width": menu.size.width, "height": menu.size.height,
          "itemTitles": menu.items.filter { !$0.isSeparatorItem && $0.view == nil }.map(\.title),
          "petActionTitle":pet.title,"petState":pet.state.rawValue,"petDetail":petStatus.attributedTitle?.string ?? "",

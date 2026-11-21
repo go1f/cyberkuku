@@ -48,6 +48,11 @@ struct MonitorSettings: Codable, Equatable {
     var resumeOnLaunch = true
     var mirrored = false
     var dualPreview = false
+    private var openPreviewOnCompanionDoubleClick: Bool?
+    var companionDoubleClickOpensPreview: Bool {
+        get { openPreviewOnCompanionDoubleClick ?? true }
+        set { openPreviewOnCompanionDoubleClick = newValue }
+    }
     var sustainedSeconds: Double { get { tuning.sustainedSeconds } set { tuning.sustainedSeconds = newValue } }
     var cooldownSeconds: Double { get { tuning.cooldownSeconds } set { tuning.cooldownSeconds = newValue } }
     var reminderConfiguration: ReminderConfiguration { tuning.reminderConfiguration }

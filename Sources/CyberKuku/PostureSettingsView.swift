@@ -7,6 +7,12 @@ struct PostureSettingsForm: View {
 
     var body: some View {
         Form {
+            Section("监测窗口") {
+                Button("打开监测窗口…", action: desktop.openMain)
+                Toggle("双击伙伴打开坐姿预览", isOn: $model.settings.companionDoubleClickOpensPreview)
+                Toggle("镜像预览", isOn: $model.mirrored)
+            }
+
             Section("校准") {
                 Picker("看向哪里", selection: $model.selectedContext) {
                     ForEach(ViewingContext.allCases) { Text($0.label).tag($0) }
@@ -35,10 +41,9 @@ struct PostureSettingsForm: View {
 
             Section("监测") {
                 Toggle("启动时继续上次监测", isOn: $model.settings.resumeOnLaunch)
-                Toggle("镜像预览", isOn: $model.mirrored)
             }
 
-            DisclosureGroup("手口习惯") {
+            Section("手口习惯") {
                 Toggle("手靠近嘴唇时提醒", isOn: $model.settings.handMouthMonitoring)
                 Toggle("定时提醒放松下颌", isOn: $model.settings.jawSelfCheck)
                 Button("个人动作示范…") { desktop.showingOralSamples = true }

@@ -20,6 +20,7 @@ struct ActiveExtension {
     var configuration: (() -> AnyView)? = nil
     var makeMenu: (() -> NSMenu)? = nil
     var openWindow: (() -> Void)? = nil
+    var allowsCompanionShortcut: () -> Bool = { false }
     var artwork: CompanionArtwork? = nil
     var stop: () -> Void = {}
 }
@@ -33,8 +34,8 @@ struct ExtensionRegistration: Identifiable {
     let activate: (ExtensionContext) -> ActiveExtension
 }
 
-struct ExtensionCatalog: Decodable {
-    struct Entry: Decodable {
+struct ExtensionCatalog: Decodable, Sendable {
+    struct Entry: Decodable, Sendable {
         let id: String
         let apiVersion: Int
     }
@@ -70,7 +71,8 @@ final class ExtensionManager: ObservableObject {
     private let registrations: [ExtensionRegistration]
     private let defaults: UserDefaults
     private let bubbles: BubbleHub
-    private let fetchCatalog: () async throws -> ExtensionCatalog
+    private var catalogTask: Task<Void, Never>?
+    private let fetchCatalog: @Sendable () async throws -> ExtensionCatalog
     var onChange: (String?, Bool) -> Void = { _, _ in }
     var openSettings: (String) -> Void = { _ in }
     @Published private(set) var installed: [String: Bool]
@@ -81,7 +83,7 @@ final class ExtensionManager: ObservableObject {
     enum CatalogStatus { case idle, loading, loaded, failed }
 
     init(registrations: [ExtensionRegistration], defaults: UserDefaults, bubbles: BubbleHub,
-         fetchCatalog: @escaping () async throws -> ExtensionCatalog = { try await ExtensionCatalog.fetch() }) {
+         fetchCatalog: @escaping @Sendable () async throws -> ExtensionCatalog = { try await ExtensionCatalog.fetch() }) {
         self.registrations = registrations
         self.defaults = defaults
         self.bubbles = bubbles
@@ -99,17 +101,28 @@ final class ExtensionManager: ObservableObject {
         onChange(nil, false)
     }
 
-    func refreshCatalog() async {
-        guard catalogStatus != .loading else { return }
-        catalogStatus = .loading
-        do {
-            let result = try await fetchCatalog()
-            let supported = Set(result.extensions.filter { $0.apiVersion == 1 }.map(\.id))
-            catalog = registrations.filter { supported.contains($0.id) }
-            catalogStatus = .loaded
-        } catch {
-            catalogStatus = Task.isCancelled ? .idle : .failed
+    @discardableResult
+    func requestCatalog(onlyIfIdle: Bool = false) -> Task<Void, Never>? {
+        if let catalogTask { return catalogTask }
+        guard !onlyIfIdle || catalogStatus == .idle else { return nil }
+        let fetch = fetchCatalog
+        let task = Task(priority: .utility) { [weak self] in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            self?.catalogStatus = .loading
+            do {
+                let result = try await fetch()
+                guard !Task.isCancelled, let self else { return }
+                let supported = Set(result.extensions.filter { $0.apiVersion == 1 }.map(\.id))
+                catalog = registrations.filter { supported.contains($0.id) }
+                catalogStatus = .loaded
+            } catch {
+                if !Task.isCancelled { self?.catalogStatus = .failed }
+            }
+            self?.catalogTask = nil
         }
+        catalogTask = task
+        return task
     }
 
     func install(_ id: String) {
@@ -138,6 +151,8 @@ final class ExtensionManager: ObservableObject {
     }
 
     func shutdown() {
+        catalogTask?.cancel()
+        catalogTask = nil
         let running = active.values
         active = [:]
         for instance in running { instance.stop() }

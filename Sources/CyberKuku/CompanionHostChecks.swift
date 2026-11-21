@@ -7,7 +7,7 @@ enum CompanionHostChecks {
         Task { @MainActor in
             do {
                 try await check()
-                print("PASS extensions: catalog, import, lifecycle, menu contributions, settings, artwork and restart")
+                print("PASS extensions: background catalog, preview shortcut, native menus, settings routes, artwork and restart")
                 exit(0)
             } catch {
                 fputs("Extension check failed: \(error)\n", stderr)
@@ -27,9 +27,14 @@ enum CompanionHostChecks {
         precondition((try? ExtensionCatalog.decode(duplicate)) == nil)
         let posture = PostureExtension.registration
         var oldOutput: BubbleOutput?
+        var allowPreview = true
+        var previewsOpened = 0
         let tracked = ExtensionRegistration(id: posture.id, title: posture.title, detail: posture.detail, symbol: posture.symbol) {
             oldOutput = $0.bubbles
-            return posture.activate($0)
+            var instance = posture.activate($0)
+            instance.openWindow = { previewsOpened += 1 }
+            instance.allowsCompanionShortcut = { allowPreview }
+            return instance
         }
         let boat = ExtensionRegistration(id: "test-boat", title: "纸船", detail: "", symbol: "sailboat") { _ in
             ActiveExtension(artwork: CompanionArtwork(id: "test-boat", title: "纸船") { rect in
@@ -43,25 +48,59 @@ enum CompanionHostChecks {
             })
         }
         let host = CompanionHost(registrations: [tracked, boat], defaults: defaults, presentsOnScreen: false,
-                                 fetchCatalog: { catalog })
+                                 fetchCatalog: { try await Task.sleep(for: .milliseconds(75)); return catalog })
         let extensions = host.extensions
         precondition(extensions.installedEntries.isEmpty && host.availableArtwork.map(\.id) == ["cat"])
-        precondition(host.statusMenu.items.map(\.title) == ["设置…", "退出 CyberKuku"])
+        precondition(host.statusMenu.minimumWidth >= 200 && host.statusMenu.items.filter { !$0.isSeparatorItem }.map(\.title) == ["设置…", "退出 CyberKuku"])
         extensions.install(posture.id)
         precondition(extensions.installed.isEmpty)
 
-        await extensions.refreshCatalog()
+        host.settingsPage = .extensions
+        let refresh = extensions.requestCatalog(onlyIfIdle: true)!
+        host.settingsPage = .companion
+        host.settingsPage = .extensions
+        precondition(extensions.catalog.isEmpty && host.settingsPage == .extensions)
+        await refresh.value
+        precondition(extensions.requestCatalog(onlyIfIdle: true) == nil)
         precondition(extensions.catalogStatus == .loaded && extensions.catalog.map(\.id) == ["posture", "test-boat"])
         extensions.install(posture.id)
         precondition(extensions.installed[posture.id] == false && extensions.active[posture.id] == nil)
         extensions.setEnabled(true, for: posture.id)
         let submenu = host.statusMenu.item(withTitle: posture.title)!.submenu!
+        precondition(submenu.items.first?.title == "打开监测窗口" && submenu.items.allSatisfy { $0.view == nil })
+        host.output.onOpenMonitor()
+        precondition(previewsOpened == 1)
+        allowPreview = false
+        host.output.onOpenMonitor()
+        precondition(previewsOpened == 1)
+        host.openPrimaryWindow()
+        precondition(previewsOpened == 2)
         let settingsItem = host.statusMenu.item(withTitle: "设置…")!
         precondition(NSApp.sendAction(settingsItem.action!, to: settingsItem.target, from: settingsItem))
         let window = host.settingsWindow!
+        window.contentView?.layoutSubtreeIfNeeded()
+        precondition(window.toolbar == nil && !window.styleMask.contains(.fullSizeContentView))
         let pluginSettings = submenu.item(withTitle: "坐姿设置…")!
         precondition(NSApp.sendAction(pluginSettings.action!, to: pluginSettings.target, from: pluginSettings))
         precondition(host.settingsWindow === window && host.settingsPage == .configuration(posture.id))
+        if let path = ProcessInfo.processInfo.environment["CYBERKUKU_SETTINGS_RENDER_DIR"] {
+            let folder = URL(fileURLWithPath: path, isDirectory: true)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            for (page, filename) in [(CompanionHost.SettingsPage.companion, "companion"),
+                                     (.extensions, "extensions"), (.configuration(posture.id), "posture")] {
+                host.settingsPage = page
+                if filename == "posture" { window.setContentSize(NSSize(width: 750, height: 855)) }
+                try await Task.sleep(for: .milliseconds(80))
+                if let view = window.contentView {
+                    view.layoutSubtreeIfNeeded()
+                    if let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                        view.cacheDisplay(in: view.bounds, to: bitmap)
+                        try bitmap.representation(using: .png, properties: [:])?
+                            .write(to: folder.appendingPathComponent(filename + ".png"))
+                    }
+                }
+            }
+        }
 
         let sample = BubbleSnapshot(alerts: [
             BubbleMessage(id: "head", title: "", message: "头向左扶正", seconds: 5, recovering: false)
@@ -84,7 +123,7 @@ enum CompanionHostChecks {
 
         let restored = CompanionHost(registrations: [tracked, boat], defaults: defaults, presentsOnScreen: false,
                                      fetchCatalog: { throw ExtensionCatalog.CatalogError.unavailable })
-        await restored.extensions.refreshCatalog()
+        await restored.extensions.requestCatalog()?.value
         precondition(restored.extensions.catalogStatus == .failed)
         precondition(restored.appearance.selectedID == "test-boat" && restored.extensions.installed[posture.id] == false)
         restored.extensions.setEnabled(false, for: boat.id)

@@ -23,6 +23,7 @@ enum PostureExtension {
                 configuration: { AnyView(PostureSettingsForm(model: model, desktop: desktop)) },
                 makeMenu: { desktop.pluginMenu },
                 openWindow: { desktop.openMain() },
+                allowsCompanionShortcut: { model.settings.companionDoubleClickOpensPreview },
                 stop: { desktop.shutdown(); model.shutdown() }
             )
         }

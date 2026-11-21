@@ -29,7 +29,11 @@ final class CompanionAppearance {
 @MainActor
 final class CompanionHost: NSObject, ObservableObject {
     enum SettingsPage: Hashable { case companion, extensions, configuration(String) }
-    @Published var settingsPage: SettingsPage? = .companion
+    @Published var settingsPage: SettingsPage? = .companion {
+        didSet {
+            if settingsPage == .extensions { extensions.requestCatalog(onlyIfIdle: true) }
+        }
+    }
     private let settings = SettingsWindowController()
     var settingsWindow: NSWindow? { settings.window }
     let output: ReminderPanelController
@@ -39,11 +43,15 @@ final class CompanionHost: NSObject, ObservableObject {
     let updater: AppUpdater
     private let presentsOnScreen: Bool
     private var statusItem: NSStatusItem?
-    let statusMenu = NSMenu()
+    let statusMenu: NSMenu = {
+        let menu = NSMenu()
+        menu.minimumWidth = 212
+        return menu
+    }()
     private let appMenu = NSMenu(title: "CyberKuku")
 
     init(registrations: [ExtensionRegistration], defaults: UserDefaults = .standard, presentsOnScreen: Bool = true,
-         fetchCatalog: @escaping () async throws -> ExtensionCatalog = { try await ExtensionCatalog.fetch() }) {
+         fetchCatalog: @escaping @Sendable () async throws -> ExtensionCatalog = { try await ExtensionCatalog.fetch() }) {
         self.presentsOnScreen = presentsOnScreen
         let output = ReminderPanelController(router: DisplayRouter(), presentsOnScreen: presentsOnScreen, hosted: true)
         self.output = output
@@ -52,7 +60,7 @@ final class CompanionHost: NSObject, ObservableObject {
         appearance = CompanionAppearance(output: output, defaults: defaults, presentsOnScreen: presentsOnScreen)
         extensions = ExtensionManager(registrations: registrations, defaults: defaults, bubbles: bubbles, fetchCatalog: fetchCatalog)
         super.init()
-        output.onOpenMonitor = { [weak self] in self?.openPrimaryWindow() }
+        output.onOpenMonitor = { [weak self] in self?.companionPreviewAction?() }
         extensions.openSettings = { [weak self] id in self?.showExtensionSettings(id) }
         extensions.onChange = { [weak self] id, enabled in self?.extensionsChanged(id, enabled: enabled) }
         appearance.activate()
@@ -94,6 +102,14 @@ final class CompanionHost: NSObject, ObservableObject {
         showSettings()
     }
 
+    var companionPreviewAction: (() -> Void)? {
+        for entry in extensions.enabledEntries {
+            if let instance = extensions.active[entry.id], instance.allowsCompanionShortcut(),
+               let open = instance.openWindow { return open }
+        }
+        return nil
+    }
+
     func openPrimaryWindow() {
         if let open = extensions.enabledEntries.compactMap({ extensions.active[$0.id]?.openWindow }).first {
             open()
@@ -120,6 +136,7 @@ final class CompanionHost: NSObject, ObservableObject {
         }
         if !statusMenu.items.isEmpty { statusMenu.addItem(.separator()) }
         addItem(statusMenu, "设置…", #selector(showSettings), self)
+        statusMenu.addItem(.separator())
         addItem(statusMenu, "退出 CyberKuku", #selector(NSApplication.terminate(_:)), NSApp)
     }
 

@@ -35,42 +35,83 @@ struct CyberKukuSettingsView: View {
     @ObservedObject var host: CompanionHost
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $host.settingsPage) {
-                Label("伙伴", systemImage: "pawprint")
-                    .tag(CompanionHost.SettingsPage.companion)
-                Label("拓展", systemImage: "puzzlepiece.extension")
-                    .tag(CompanionHost.SettingsPage.extensions)
+        HStack(spacing: 0) {
+            sidebar
+                .frame(width: 208)
+            Divider()
+            detail
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.top, 8)
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var sidebar: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                sidebarRow("伙伴", symbol: "pawprint", page: .companion)
+                sidebarRow("拓展", symbol: "puzzlepiece.extension", page: .extensions)
                 let configurable = host.extensions.enabledEntries.filter {
                     host.extensions.active[$0.id]?.configuration != nil || host.extensions.active[$0.id]?.artwork != nil
                 }
                 if !configurable.isEmpty {
-                    Section("插件配置") {
-                        ForEach(configurable) { entry in
-                            Label(entry.title, systemImage: entry.symbol)
-                                .tag(CompanionHost.SettingsPage.configuration(entry.id))
-                        }
+                    Text("插件配置")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 10)
+                        .padding(.top, 16)
+                        .padding(.bottom, 3)
+                        .accessibilityAddTraits(.isHeader)
+                    ForEach(configurable) { entry in
+                        sidebarRow(entry.title, symbol: entry.symbol, page: .configuration(entry.id))
                     }
                 }
             }
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 208)
-        } detail: {
-            switch host.settingsPage ?? .companion {
-            case .companion:
-                companionSettings
-            case .extensions:
-                ExtensionsSettings(manager: host.extensions)
-            case .configuration(let id):
-                if let instance = host.extensions.active[id] {
-                    if let configuration = instance.configuration {
-                        configuration().id(id)
-                    } else if let artwork = instance.artwork {
-                        artworkPreview(artwork)
-                    }
+            .padding(10)
+        }
+        .background(.regularMaterial)
+    }
+
+    private func sidebarRow(_ title: String, symbol: String, page: CompanionHost.SettingsPage) -> some View {
+        let selected = host.settingsPage == page
+        return Button {
+            host.settingsPage = page
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: symbol)
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                    .frame(width: 20)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .fontWeight(selected ? .semibold : .regular)
+                    .foregroundStyle(.primary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(.primary.opacity(selected ? 0.09 : 0), in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    @ViewBuilder private var detail: some View {
+        switch host.settingsPage ?? .companion {
+        case .companion:
+            companionSettings
+        case .extensions:
+            ExtensionsSettings(manager: host.extensions)
+        case .configuration(let id):
+            if let instance = host.extensions.active[id] {
+                if let configuration = instance.configuration {
+                    configuration().id(id)
+                } else if let artwork = instance.artwork {
+                    artworkPreview(artwork)
                 }
             }
-        }.navigationSplitViewStyle(.balanced)
+        }
     }
 
     private var companionSettings: some View {
@@ -141,14 +182,11 @@ private struct ExtensionsSettings: View {
                         }
                     } label: { extensionLabel(entry) }
                 }
-                Button("刷新商店") { Task { await manager.refreshCatalog() } }
+                Button("刷新商店") { manager.requestCatalog() }
                     .disabled(manager.catalogStatus == .loading)
             }
         }
         .formStyle(.grouped)
-        .task {
-            if manager.catalogStatus == .idle { await manager.refreshCatalog() }
-        }
     }
 
     private func extensionLabel(_ entry: ExtensionRegistration) -> some View {

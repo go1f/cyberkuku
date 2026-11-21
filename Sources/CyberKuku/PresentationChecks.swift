@@ -31,10 +31,9 @@ import PostureCore
                     precondition(window.frame == original, "Status text resized the application window")
                     let snapshot = desktop.presentationSnapshot["statusPanel"] as! [String:Any]
                     precondition(snapshot["systemAnchored"] as? Bool == true)
-                    precondition(snapshot["headerOpaque"] as? Bool == false)
+                    precondition(snapshot["hasCustomRows"] as? Bool == false)
                     let titles = snapshot["itemTitles"] as! [String]
                     precondition(titles.contains("镜像预览") && !titles.contains(where: { $0.contains("更新") }))
-                    precondition(snapshot["headerHeight"] as? CGFloat == 112)
                     menuSizes.append("\(snapshot["width"]!)x\(snapshot["height"]!)")
                 }
                 precondition(Set(menuSizes).count == 1, "Status changes resized the menu")
@@ -67,7 +66,7 @@ import PostureCore
                 }
                 let report: [String:Any] = ["passed":true, "input":"synthetic images and offscreen native views; no camera or desktop capture",
                     "windowFrameStableAcrossStatusAndPreviewChanges":true, "nativeMenuSizeStable":true,
-                    "menuAttachedToNativeStatusItem":true, "menuHeaderTransparent":true,
+                    "menuAttachedToNativeStatusItem":true, "menuHasOnlyNativeRows":true,
                     "mirrorMenuPresent":true, "updateMenuAbsent":true, "menuSizes":menuSizes,
                     "roundedCornersPreservedAcrossRecovery":true,
                     "onlyVerifiedEpisodeTransitionsReportRecovery":true,

@@ -90,9 +90,6 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
             self?.statusItem?.button?.toolTip = "坐姿监测 · \(state.label) · ⌥点击切换画中画"
             DispatchQueue.main.async { self?.statusPanel.updateGeometry() }
         }.store(in: &subscriptions)
-        model.$metrics.map { $0?.shoulderReason ?? "" }.removeDuplicates().sink { [weak self] _ in
-            DispatchQueue.main.async { self?.statusPanel.updateGeometry() }
-        }.store(in: &subscriptions)
         screenObserver = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated {
                 self?.placementWork?.cancel(); self?.placementWork = nil; self?.placePiP()
