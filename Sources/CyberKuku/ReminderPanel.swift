@@ -38,7 +38,6 @@ private enum BannerLayout {
 private struct RecoveryIndicator: View {
     let progress: Double
     let animates: Bool
-    let completed: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var value: Double { min(1, max(0, progress)) }
     var body: some View {
@@ -50,14 +49,8 @@ private struct RecoveryIndicator: View {
                     .rotationEffect(.degrees(-90))
                     .animation(reduceMotion || !animates ? nil : .linear(duration: 0.22), value: value)
             }
-            .opacity(completed ? 0 : 1)
-            Image(systemName: "checkmark")
-                .font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.green)
-                .opacity(completed ? 1 : 0)
-                .scaleEffect(reduceMotion || completed ? 1 : 0.8)
         }
         .padding(2).frame(width: BannerLayout.indicator, height: BannerLayout.indicator)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: completed)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(value >= 1 ? "已确认恢复" : "正在确认恢复")
         .accessibilityValue("\(Int(value * 100))%")
@@ -95,7 +88,7 @@ private struct BannerView: View {
         HStack(spacing: BannerLayout.gap) {
             if let alert, alert.recovering || alert.resolved {
                 RecoveryIndicator(progress: alert.resolved ? 1 : alert.recoveryProgress,
-                    animates: alert.animateRecovery, completed: alert.showsRecoveryCheckmark)
+                    animates: alert.animateRecovery)
             } else {
                 Image(systemName: "figure.seated.side").font(.system(size: 17, weight: .medium))
                     .foregroundStyle(state.island ? Color.white.opacity(0.85) : Color.accentColor)
@@ -144,7 +137,6 @@ private struct BannerView: View {
     private var reviewWindow: NSWindow?
     private let trackingGrace = 2.0
     private let completionHold = 3.0
-    private let completionRingHold = 0.35
 
     init(router: DisplayRouter, now: @escaping () -> Double = { ProcessInfo.processInfo.systemUptime }, presentsOnScreen: Bool = true, hosted: Bool = false) {
         self.router = router; self.now = now; self.presentsOnScreen = presentsOnScreen
@@ -219,8 +211,6 @@ private struct BannerView: View {
                     var completed = old; completed.resolved = true; completed.suspended = false
                     completed.recovering = true; completed.recoveryProgress = 1
                     completed.animateRecovery = true
-                    completed.showsRecoveryCheckmark = time >= start + completionRingHold
-                    if !completed.showsRecoveryCheckmark { deadlines.append(start + completionRingHold) }
                     rows.append(completed); deadlines.append(start + completionHold)
                     if !old.resolved { recoveryCount += 1 }
                 }

@@ -54,12 +54,14 @@ struct CyberKukuSettingsView: View {
         HStack(spacing: 0) {
             sidebar
                 .frame(width: 208)
-            Divider()
+                .background { Rectangle().fill(.regularMaterial).ignoresSafeArea(edges: .vertical) }
+            Divider().ignoresSafeArea(edges: .vertical)
             VStack(spacing: 0) {
                 pageHeader
+                    .padding(.top, -18)
                 detail.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
-            .background(Color(nsColor: .controlBackgroundColor))
+            .background { Color(nsColor: .controlBackgroundColor).ignoresSafeArea(edges: .vertical) }
         }
         .background(Color(nsColor: .windowBackgroundColor))
     }
@@ -81,17 +83,15 @@ struct CyberKukuSettingsView: View {
                         .padding(.bottom, 3)
                         .accessibilityAddTraits(.isHeader)
                     ForEach(configurable) { entry in
-                        sidebarRow(entry.title, symbol: entry.symbol, page: .configuration(entry.id))
+                        sidebarRow(entry.title, symbol: "puzzlepiece.extension", page: .configuration(entry.id))
                     }
                 }
             }
             .padding(10)
         }
-        .background(.regularMaterial, ignoresSafeAreaEdges: .top)
     }
 
     private func sidebarRow(_ title: String, symbol: String, page: CompanionHost.SettingsPage) -> some View {
-        let color: Color = page == .companion ? .brown : page == .extensions ? .indigo : .teal
         let selected = host.settingsPage == page || (page == .companion && host.settingsPage == .updates)
         return Button {
             host.settingsPage = page
@@ -100,18 +100,17 @@ struct CyberKukuSettingsView: View {
                 Image(systemName: symbol)
                     .symbolRenderingMode(.monochrome)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .frame(width: 23, height: 23)
-                    .background(color.gradient, in: RoundedRectangle(cornerRadius: 6))
                     .accessibilityHidden(true)
                 Text(title)
                     .fontWeight(selected ? .semibold : .regular)
-                    .foregroundStyle(selected ? Color.white : Color.primary)
+                    .foregroundStyle(.primary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(selected ? Color(nsColor: .selectedContentBackgroundColor) : .clear, in: RoundedRectangle(cornerRadius: 8))
+            .background(Color.primary.opacity(selected ? 0.08 : 0), in: RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -250,6 +249,6 @@ private struct ExtensionsSettings: View {
                 Text(entry.title)
                 Text(entry.detail).font(.caption).foregroundStyle(.secondary)
             }
-        } icon: { Image(systemName: entry.symbol) }
+        } icon: { Image(systemName: "puzzlepiece.extension") }
     }
 }

@@ -908,21 +908,15 @@ private final class ComicBubbleView: NSView {
             }
             let widest = lines.map { ($0 as NSString).size(withAttributes: Self.ink).width }.max() ?? 0
             let height = CGFloat(lines.count) * (Self.lineHeight + Self.lineGap) - Self.lineGap
-            // Keep room for the recovery mark without changing the bubble size.
             size = NSSize(width: max(88, ceil(widest) + 64), height: max(68, height + 54))
         }
 
-        func draw(in body: NSRect, resolved: Bool) {
+        func draw(in body: NSRect) {
             let advance = Self.lineHeight + Self.lineGap
             let textHeight = CGFloat(lines.count) * advance - Self.lineGap
             let top = body.midY + textHeight / 2
             for (index, line) in lines.enumerated() {
-                let text = NSMutableAttributedString(string: line, attributes: Self.ink)
-                if resolved && index == lines.count - 1 {
-                    var attributes = Self.ink
-                    attributes[.foregroundColor] = NSColor.systemGreen
-                    text.append(NSAttributedString(string: " ✓", attributes: attributes))
-                }
+                let text = NSAttributedString(string: line, attributes: Self.ink)
                 let offset: CGFloat = lines.count == 2 ? (index == 0 ? -5 : 5) : 0
                 let x = body.midX + offset - text.size().width / 2
                 let y = top - Self.lineHeight - CGFloat(index) * advance
@@ -963,7 +957,7 @@ private final class ComicBubbleView: NSView {
         path.line(to: PetPlacement.tailTip(body:b,bounds:bounds,target:localTarget)); path.close()
         NSColor.white.setFill(); path.fill()
         (resolved ? NSColor.systemGreen : NSColor(white: recovering ? 0.4 : 0.25,alpha:1)).setStroke(); path.lineWidth = 1.15; path.stroke()
-        lettering.draw(in: b, resolved: resolved)
+        lettering.draw(in: b)
     }
 }
 

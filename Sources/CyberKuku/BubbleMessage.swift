@@ -8,7 +8,6 @@ struct BubbleMessage: Equatable, Identifiable {
     var recovering: Bool
     var recoveryProgress: Double = 0
     var resolved = false
-    var showsRecoveryCheckmark = false
     var suspended = false
     var animateRecovery = true
 }

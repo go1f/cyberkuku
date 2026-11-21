@@ -65,6 +65,7 @@ final class DiagnosticModel: ObservableObject {
         }
     }
     var onReminderEvent: ((ReminderEvent) -> Void)?
+    @Published private(set) var previewReminderMessages: [String] = []
     var onReminderAlertsChanged: ((BubbleSnapshot) -> Void)?
     var onSettingsChanged: ((MonitorSettings, MonitorSettings) -> Void)?
     var onWindowClosed: (() -> Void)?
@@ -539,6 +540,8 @@ final class DiagnosticModel: ObservableObject {
                 }
             }
         }
+        let messages = alerts.filter { !$0.recovering }.map(\.message)
+        if previewReminderMessages != messages { previewReminderMessages = messages }
         var ongoingIDs: Set<String> = []
         let enabled = hasStarted && settings.automaticReminders && collector == nil && !oralSamples.isRecording
         if enabled {

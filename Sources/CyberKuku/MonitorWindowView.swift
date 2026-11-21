@@ -172,6 +172,13 @@ private struct MonitorVideoPane: View {
             } else {
                 CameraPreview(session: model.cameraSession, mirrored: mirrored, enabled: model.renderingImageRequested)
             }
+            if let observation = model.frame?.observation, observation.faceCount == 1,
+               let face = observation.faceBox, !model.previewReminderMessages.isEmpty {
+                PreviewReminderEffect(observation: observation, face: face, mirrored: mirrored,
+                                      messages: model.previewReminderMessages)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
             if model.settings.showsPreviewLandmarks, let frame = model.frame {
                 LandmarkOverlay(observation: frame.observation, metrics: model.metrics, mirrored: mirrored)
                     .allowsHitTesting(false)
@@ -186,5 +193,50 @@ private struct MonitorVideoPane: View {
             }
         }
         .clipped()
+    }
+}
+
+
+private struct PreviewReminderEffect: View {
+    let observation: Observation
+    let face: FaceBox
+    let mirrored: Bool
+    let messages: [String]
+
+    var body: some View {
+        Canvas { context, size in
+            func position(_ x: Double, _ y: Double) -> CGPoint {
+                let point = Geometry.previewPoint(Point(x, y), source: observation.imageSize,
+                    viewport: ImageSize(size.width, size.height), mirrored: mirrored)
+                return CGPoint(x: point.x, y: point.y)
+            }
+            func bounds(_ a: CGPoint, _ b: CGPoint) -> CGRect {
+                CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y))
+            }
+            let image = bounds(position(0, 0), position(1, 1)).insetBy(dx: 8, dy: 6)
+            let protectedFace = bounds(position(face.x, face.y),
+                position(face.x + face.width, face.y + face.height)).insetBy(dx: -14, dy: -14)
+            let fontSize = min(58, max(18, image.width / 17))
+            let step = fontSize * 1.45
+            guard image.width > 2 * step, image.height > step else { return }
+            var index = 0
+            for (row, y) in stride(from: image.minY + step / 2, to: image.maxY, by: step).enumerated() {
+                var x = image.minX + CGFloat(row % 2) * fontSize * 0.65
+                while x < image.maxX {
+                    let text = context.resolve(Text(messages[index % messages.count])
+                        .font(.system(size: fontSize, weight: .black))
+                        .foregroundColor(.white.opacity(row.isMultiple(of: 2) ? 0.82 : 0.56)))
+                    let measured = text.measure(in: CGSize(width: image.width, height: step))
+                    let rect = CGRect(x: x, y: y - measured.height / 2, width: measured.width, height: measured.height)
+                    if image.contains(rect), !protectedFace.intersects(rect) {
+                        var shadow = context
+                        shadow.addFilter(.shadow(color: .black.opacity(0.85), radius: 3, y: 2))
+                        shadow.draw(text, at: rect.origin, anchor: .topLeading)
+                        index += 1
+                    }
+                    x += max(fontSize, measured.width) + fontSize * 0.75
+                }
+            }
+        }
     }
 }

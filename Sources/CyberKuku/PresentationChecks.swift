@@ -79,9 +79,9 @@ import PostureCore
                 time = 2; banner.synchronize(BubbleSnapshot(alerts: [], ongoingIDs: [], recoveredIDs: [head.id]))
                 try banner.renderReview(to: folder.appendingPathComponent("reminder-complete.png"))
                 time = 2.5; banner.synchronize(BubbleSnapshot(alerts: [], ongoingIDs: []))
-                try banner.renderReview(to: folder.appendingPathComponent("reminder-checkmark.png"))
+                try banner.renderReview(to: folder.appendingPathComponent("reminder-recovered-hold.png"))
                 banner.synchronize(BubbleSnapshot(alerts: [], ongoingIDs: [], enabled: false))
-                for name in ["reminder-active.png", "reminder-recovering.png", "reminder-complete.png", "reminder-checkmark.png"] {
+                for name in ["reminder-active.png", "reminder-recovering.png", "reminder-complete.png", "reminder-recovered-hold.png"] {
                     let image = NSBitmapImageRep(data: try Data(contentsOf: folder.appendingPathComponent(name)))!
                     precondition(image.colorAt(x: 0, y: 0)!.alphaComponent < 0.01, "Reminder corner became square")
                     precondition(image.colorAt(x: image.pixelsWide/2, y: image.pixelsHigh/2)!.alphaComponent > 0.99)
@@ -93,7 +93,7 @@ import PostureCore
                     "roundedCornersPreservedAcrossRecovery":true,
                     "onlyVerifiedEpisodeTransitionsReportRecovery":true,
                     "nativeVideoOnlyPiP":true,
-                    "renders":["dual-preview.png","single-preview.png","paused-preview.png","dark-preview.png","reminder-active.png","reminder-recovering.png","reminder-complete.png","reminder-checkmark.png"]]
+                    "renders":["dual-preview.png","single-preview.png","paused-preview.png","dark-preview.png","reminder-active.png","reminder-recovering.png","reminder-complete.png","reminder-recovered-hold.png"]]
                 let data = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted,.sortedKeys])
                 try data.write(to: folder.appendingPathComponent("checks.json"), options:.atomic)
                 print(String(data:data,encoding:.utf8)!)
