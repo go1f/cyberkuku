@@ -1,0 +1,6 @@
+{
+  "schema": 1,
+  "extensions": [
+    { "id": "posture", "apiVersion": 1 }
+  ]
+}

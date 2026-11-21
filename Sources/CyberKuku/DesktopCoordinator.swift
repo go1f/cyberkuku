@@ -6,7 +6,6 @@ import PostureCore
 @MainActor
 final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
     let model: DiagnosticModel
-    let updater: AppUpdater
     let router = DisplayRouter()
     private let sharedOutput: BubbleOutput?
     lazy var reminders: ReminderPanelController = {
@@ -35,10 +34,9 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
 
     var embedded: Bool { sharedOutput != nil }
     var pluginMenu: NSMenu { statusPanel.pluginMenu }
-    init(model: DiagnosticModel, output: BubbleOutput? = nil, appUpdater: AppUpdater? = nil) {
+    init(model: DiagnosticModel, output: BubbleOutput? = nil) {
         sharedOutput = output
         self.model = model
-        updater = appUpdater ?? AppUpdater(enabled: CommandLine.arguments.contains("--update-qa") || !model.isDemo && !CommandLine.arguments.contains("--demo") && !CommandLine.arguments.contains("--ui-smoke") && !CommandLine.arguments.contains("--background-check") && !CommandLine.arguments.contains("--camera-check") && !CommandLine.arguments.contains("--layout-check"))
         super.init()
         if output == nil {
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -276,7 +274,6 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
         statusPanel.hide()
         mainWindow?.close(); standaloneSettings.close(); pipPanel?.close()
         if sharedOutput == nil { reminders.shutdown() }
-        else { sharedOutput?.close() }
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
     }
@@ -292,10 +289,6 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
         open.keyEquivalentModifierMask = [.command, .shift]; open.target = self; menu.addItem(open)
         let pip = NSMenuItem(title: "切换画中画", action: #selector(togglePiP), keyEquivalent: "p")
         pip.keyEquivalentModifierMask = [.command, .option]; pip.target = self; menu.addItem(pip)
-        menu.addItem(.separator())
-        let update = NSMenuItem(title: "检查更新…", action: #selector(AppUpdater.checkForUpdates(_:)), keyEquivalent: "")
-        update.target = updater; menu.addItem(update)
-        updater.$canCheck.receive(on: RunLoop.main).sink { update.isEnabled = $0 }.store(in: &subscriptions)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "退出 CyberKuku", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         appItem.submenu = menu; root.addItem(appItem)

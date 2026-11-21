@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import PostureCore
 
 @MainActor
 final class SettingsWindowController {
@@ -8,9 +7,10 @@ final class SettingsWindowController {
 
     func show<Content: View>(_ content: @autoclosure () -> Content, activate: Bool = true) {
         if window == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 510),
-                                  styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 750, height: 550),
+                                  styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
             window.title = "CyberKuku 设置"
+            window.contentMinSize = NSSize(width: 620, height: 460)
             window.isReleasedWhenClosed = false
             let view = NSHostingView(rootView: content())
             view.sizingOptions = []
@@ -35,93 +35,128 @@ struct CyberKukuSettingsView: View {
     @ObservedObject var host: CompanionHost
 
     var body: some View {
-        TabView(selection: $host.settingsPage) {
-            Form {
-                Section("桌面形象") {
-                    Picker("当前形象", selection: Binding(get: { host.appearance.skin }, set: host.adopt)) {
-                        ForEach(CompanionSkin.allCases, id: \.self) { Text($0.title).tag($0) }
+        NavigationSplitView {
+            List(selection: $host.settingsPage) {
+                Label("伙伴", systemImage: "pawprint")
+                    .tag(CompanionHost.SettingsPage.companion)
+                Label("拓展", systemImage: "puzzlepiece.extension")
+                    .tag(CompanionHost.SettingsPage.extensions)
+                let configurable = host.extensions.enabledEntries.filter {
+                    host.extensions.active[$0.id]?.configuration != nil || host.extensions.active[$0.id]?.artwork != nil
+                }
+                if !configurable.isEmpty {
+                    Section("插件配置") {
+                        ForEach(configurable) { entry in
+                            Label(entry.title, systemImage: entry.symbol)
+                                .tag(CompanionHost.SettingsPage.configuration(entry.id))
+                        }
                     }
                 }
-            }.formStyle(.grouped)
-                .tabItem { Label("伙伴", systemImage: "pawprint") }
-                .tag(CompanionHost.SettingsPage.companion)
-
-            VStack(spacing: 0) {
-                Toggle("启用注意坐姿", isOn: Binding(get: { host.posture.desktop != nil }, set: host.setPostureEnabled))
-                    .toggleStyle(.switch)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 14)
-                Divider()
-                if let desktop = host.posture.desktop {
-                    PostureSettingsForm(model: desktop.model, desktop: desktop)
-                } else {
-                    Spacer()
-                    Text("启用后，可从菜单栏开始监测。")
-                        .foregroundStyle(.secondary)
-                    Spacer()
+            }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 180, ideal: 208)
+        } detail: {
+            switch host.settingsPage ?? .companion {
+            case .companion:
+                companionSettings
+            case .extensions:
+                ExtensionsSettings(manager: host.extensions)
+            case .configuration(let id):
+                if let instance = host.extensions.active[id] {
+                    if let configuration = instance.configuration {
+                        configuration().id(id)
+                    } else if let artwork = instance.artwork {
+                        artworkPreview(artwork)
+                    }
                 }
             }
-            .tabItem { Label("注意坐姿", systemImage: "figure.seated.side") }
-            .tag(CompanionHost.SettingsPage.posture)
+        }.navigationSplitViewStyle(.balanced)
+    }
+
+    private var companionSettings: some View {
+        Form {
+            Section("桌面形象") {
+                Picker("切换形象", selection: Binding(get: { host.appearance.selectedID }, set: { id in
+                    if let artwork = host.availableArtwork.first(where: { $0.id == id }) { host.adopt(artwork) }
+                })) {
+                    ForEach(host.availableArtwork) { Text($0.title).tag($0.id) }
+                }
+            }
+            Section("应用") {
+                LabeledContent("版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+                Button("应用更新…") { host.updater.showWindow() }
+            }
+        }.formStyle(.grouped)
+    }
+
+    private func artworkPreview(_ artwork: CompanionArtwork) -> some View {
+        VStack(spacing: 14) {
+            if let draw = artwork.draw {
+                let image = NSImage(size: NSSize(width: 140, height: 100), flipped: false) { rect in
+                    draw(rect.insetBy(dx: 12, dy: 12))
+                    return true
+                }
+                Image(nsImage: image).accessibilityHidden(true)
+            }
+            Text(artwork.title).font(.headline)
         }
-        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
-struct PostureSettingsForm: View {
-    @ObservedObject var model: DiagnosticModel
-    @ObservedObject var desktop: DesktopCoordinator
+private struct ExtensionsSettings: View {
+    @ObservedObject var manager: ExtensionManager
 
     var body: some View {
         Form {
-            Section("校准") {
-                Picker("看向哪里", selection: $model.selectedContext) {
-                    ForEach(ViewingContext.allCases) { Text($0.label).tag($0) }
+            Section("已安装") {
+                if manager.installedEntries.isEmpty {
+                    Text("还没有安装插件").foregroundStyle(.secondary)
                 }
-                .disabled(model.calibrationProgress != nil || model.oralSamples.isRecording)
-
-                if let progress = model.calibrationProgress {
-                    ProgressView(value: progress)
-                    Button("取消校准", action: { model.cancelCalibration() })
-                } else if model.status.isActive || model.hasStarted {
-                    Button(model.profile == nil ? "校准坐姿" : "重新校准") { model.beginCalibration() }
-                        .disabled(!model.canCalibrate)
-                } else {
-                    Button("开始监测以校准") { model.start() }
+                ForEach(manager.installedEntries) { entry in
+                    Toggle(isOn: Binding(get: { manager.installed[entry.id] == true }, set: {
+                        manager.setEnabled($0, for: entry.id)
+                    })) { extensionLabel(entry) }
+                    .toggleStyle(.switch)
                 }
-                Text(model.calibrationMessage).font(.caption).foregroundStyle(.secondary)
             }
 
-            Section("提醒") {
-                Toggle("坐姿提醒", isOn: $model.settings.automaticReminders)
-                Picker("提醒强度", selection: Binding(get: { model.settings.sensitivity }, set: { model.settings.sensitivity = $0 })) {
-                    ForEach(PostureSensitivity.allCases) { Text($0.title).tag($0) }
-                }.disabled(!model.settings.automaticReminders)
-                Button("试播提醒", action: desktop.previewReminder)
-            }
-
-            Section("监测") {
-                Toggle("启动时继续上次监测", isOn: $model.settings.resumeOnLaunch)
-                Toggle("镜像预览", isOn: $model.mirrored)
-            }
-
-            DisclosureGroup("手口习惯") {
-                Toggle("手靠近嘴唇时提醒", isOn: $model.settings.handMouthMonitoring)
-                Toggle("定时提醒放松下颌", isOn: $model.settings.jawSelfCheck)
-                Button("个人动作示范…") { desktop.showingOralSamples = true }
+            Section("插件商店") {
+                if manager.catalogStatus == .loading {
+                    ProgressView("正在读取商店…").controlSize(.small)
+                }
+                if manager.catalogStatus == .failed {
+                    Text("暂时无法读取插件商店。").foregroundStyle(.secondary)
+                }
+                if manager.catalogStatus == .loaded && manager.catalog.isEmpty {
+                    Text("暂无适用于当前版本的插件。").foregroundStyle(.secondary)
+                }
+                ForEach(manager.catalog) { entry in
+                    LabeledContent {
+                        if manager.installed[entry.id] != nil {
+                            Text("已导入").foregroundStyle(.secondary)
+                        } else {
+                            Button("导入") { manager.install(entry.id) }
+                                .accessibilityLabel("导入" + entry.title)
+                        }
+                    } label: { extensionLabel(entry) }
+                }
+                Button("刷新商店") { Task { await manager.refreshCatalog() } }
+                    .disabled(manager.catalogStatus == .loading)
             }
         }
         .formStyle(.grouped)
-        .sheet(isPresented: $desktop.showingOralSamples, onDismiss: { if model.oralSamples.isRecording { model.cancelOralRecording() } }) {
-            VStack(spacing: 0) {
-                Form {
-                    OralSampleSettingsView(model: model, store: model.oralSamples)
-                }.formStyle(.grouped)
-                Button("完成") { desktop.showingOralSamples = false }
-                    .keyboardShortcut(.defaultAction)
-                    .padding()
-            }.frame(width: 420, height: 365)
+        .task {
+            if manager.catalogStatus == .idle { await manager.refreshCatalog() }
         }
+    }
+
+    private func extensionLabel(_ entry: ExtensionRegistration) -> some View {
+        Label {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry.title)
+                Text(entry.detail).font(.caption).foregroundStyle(.secondary)
+            }
+        } icon: { Image(systemName: entry.symbol) }
     }
 }

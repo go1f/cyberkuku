@@ -12,10 +12,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         appearance.start()
         let args = CommandLine.arguments
-        let diagnostics = ["--demo", "--ui-smoke", "--camera-check", "--background-check", "--layout-check", "--update-qa"]
+        let diagnostics = ["--demo", "--ui-smoke", "--camera-check", "--background-check", "--layout-check"]
         if !args.contains(where: diagnostics.contains) {
-            let host = CompanionHost()
+            PostureExtension.carryForwardInstallation()
+            let host = CompanionHost(registrations: [PostureExtension.registration])
             self.host = host
+            if args.contains("--update-qa") { host.updater.showWindow() }
             if args.contains("--show-companion") { host.appearance.pet?.showByUser() }
             return
         }
@@ -92,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if let host { host.posture.desktop?.showMain(expandPreview: false) }
+        if let host { host.openPrimaryWindow() }
         else { desktop?.showMain(expandPreview: false) }
         return true
     }

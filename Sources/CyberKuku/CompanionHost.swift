@@ -2,40 +2,16 @@ import AppKit
 import AVFoundation
 import SwiftUI
 
-enum CompanionSkin: String, CaseIterable {
-    case cat, boat
-    var title: String { self == .cat ? "小灰猫" : "纸船" }
-}
-
-enum PaperBoat {
-    static func draw(in rect: CGRect) {
-        func fold(_ points: [(CGFloat, CGFloat)], color: NSColor) {
-            let path = NSBezierPath()
-            for (index, point) in points.enumerated() {
-                let p = CGPoint(x: rect.minX + point.0 * rect.width, y: rect.minY + point.1 * rect.height)
-                if index == 0 { path.move(to: p) } else { path.line(to: p) }
-            }
-            path.close()
-            color.setFill()
-            path.fill()
-            NSColor.darkGray.setStroke()
-            path.lineWidth = 0.8
-            path.stroke()
-        }
-        fold([(0.20,0.45),(0.57,0.96),(0.77,0.50)], color: .init(white: 0.95, alpha: 1))
-        fold([(0,0.57),(0.46,0.36),(1,0.62),(0.73,0.10),(0.29,0.07)], color: .init(red: 0.83, green: 0.76, blue: 0.64, alpha: 1))
-    }
-}
-
 @MainActor
-final class AppearancePlugin {
+final class CompanionAppearance {
     private let output: ReminderPanelController
     private let defaults: UserDefaults
     private let presentsOnScreen: Bool
     private(set) var pet: DesktopPetController?
-    var skin: CompanionSkin {
-        get { CompanionSkin(rawValue: defaults.string(forKey: "appearance.skin") ?? "") ?? .cat }
-        set { defaults.set(newValue.rawValue, forKey: "appearance.skin"); pet?.useSkin(newValue) }
+    var selectedID: String { defaults.string(forKey: "appearance.skin") ?? CompanionArtwork.cat.id }
+    func apply(_ artwork: CompanionArtwork) {
+        defaults.set(artwork.id, forKey: "appearance.skin")
+        pet?.useArtwork(artwork)
     }
     init(output: ReminderPanelController, defaults: UserDefaults, presentsOnScreen: Bool) {
         self.output = output; self.defaults = defaults; self.presentsOnScreen = presentsOnScreen
@@ -43,7 +19,7 @@ final class AppearancePlugin {
     func activate() {
         guard pet == nil else { return }
         let companion = DesktopPetController(defaults: defaults, presentsOnScreen: presentsOnScreen, allowsHiding: false)
-        companion.useSkin(skin)
+        companion.useArtwork(.cat)
         pet = companion
         output.attachCompanion(companion)
     }
@@ -51,63 +27,37 @@ final class AppearancePlugin {
 }
 
 @MainActor
-final class PosturePlugin {
-    let id = "posture", title = "注意坐姿"
-    private let output: BubbleHub
-    private let updater: AppUpdater
-    private(set) var desktop: DesktopCoordinator?
-    init(output: BubbleHub, updater: AppUpdater) {
-        self.output = output; self.updater = updater
-    }
-    func activate() {
-        guard desktop == nil else { return }
-        desktop = DesktopCoordinator(model: DiagnosticModel(), output: output.open(id), appUpdater: updater)
-    }
-    func deactivate() {
-        desktop?.shutdown()
-        desktop?.model.shutdown()
-        desktop = nil
-    }
-}
-
-@MainActor
 final class CompanionHost: NSObject, ObservableObject {
-    enum SettingsPage: Hashable { case companion, posture }
-    @Published var settingsPage: SettingsPage = .companion
+    enum SettingsPage: Hashable { case companion, extensions, configuration(String) }
+    @Published var settingsPage: SettingsPage? = .companion
     private let settings = SettingsWindowController()
     var settingsWindow: NSWindow? { settings.window }
     let output: ReminderPanelController
     let bubbles: BubbleHub
-    let appearance: AppearancePlugin
-    let posture: PosturePlugin
+    let appearance: CompanionAppearance
+    let extensions: ExtensionManager
     let updater: AppUpdater
-    private let defaults: UserDefaults
     private let presentsOnScreen: Bool
     private var statusItem: NSStatusItem?
     let statusMenu = NSMenu()
-    private let shapeMenu = NSMenu(title: "切换形象")
     private let appMenu = NSMenu(title: "CyberKuku")
 
-    init(defaults: UserDefaults = .standard, presentsOnScreen: Bool = true) {
-        self.defaults = defaults
+    init(registrations: [ExtensionRegistration], defaults: UserDefaults = .standard, presentsOnScreen: Bool = true,
+         fetchCatalog: @escaping () async throws -> ExtensionCatalog = { try await ExtensionCatalog.fetch() }) {
         self.presentsOnScreen = presentsOnScreen
         let output = ReminderPanelController(router: DisplayRouter(), presentsOnScreen: presentsOnScreen, hosted: true)
         self.output = output
         bubbles = BubbleHub(renderer: output)
-        let updater = AppUpdater(enabled: presentsOnScreen)
-        self.updater = updater
-        appearance = AppearancePlugin(output: output, defaults: defaults, presentsOnScreen: presentsOnScreen)
-        posture = PosturePlugin(output: bubbles, updater: updater)
+        updater = AppUpdater(enabled: presentsOnScreen)
+        appearance = CompanionAppearance(output: output, defaults: defaults, presentsOnScreen: presentsOnScreen)
+        extensions = ExtensionManager(registrations: registrations, defaults: defaults, bubbles: bubbles, fetchCatalog: fetchCatalog)
         super.init()
-        output.onOpenMonitor = { [weak self] in self?.posture.desktop?.openMain() }
+        output.onOpenMonitor = { [weak self] in self?.openPrimaryWindow() }
+        extensions.openSettings = { [weak self] id in self?.showExtensionSettings(id) }
+        extensions.onChange = { [weak self] id, enabled in self?.extensionsChanged(id, enabled: enabled) }
         appearance.activate()
-        if defaults.bool(forKey: "plugins.posture") { activatePosture() }
-        rebuildStatusMenu()
+        extensions.restore()
         if presentsOnScreen {
-            if let model = posture.desktop?.model, model.settings.resumeOnLaunch, !model.profiles.isEmpty,
-               AVCaptureDevice.authorizationStatus(for: .video) == .authorized {
-                model.start()
-            }
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
             if let url = Bundle.main.url(forResource: "StatusIcon", withExtension: "png"), let icon = NSImage(contentsOf: url) {
                 item.button?.image = AppAppearance.statusIcon(source: icon)
@@ -119,34 +69,36 @@ final class CompanionHost: NSObject, ObservableObject {
         }
     }
 
-    private func activatePosture() {
-        posture.activate()
-        posture.desktop?.openPostureSettings = { [weak self] in self?.showPostureSettings() }
+    var availableArtwork: [CompanionArtwork] {
+        [.cat] + extensions.enabledEntries.compactMap { extensions.active[$0.id]?.artwork }
     }
 
-    func setPostureEnabled(_ enabled: Bool) {
-        guard enabled != (posture.desktop != nil) else { return }
-        objectWillChange.send()
-        if enabled { activatePosture() } else { posture.deactivate() }
-        defaults.set(enabled, forKey: "plugins.posture")
+    private func extensionsChanged(_ id: String?, enabled: Bool) {
+        let activated = id.flatMap { extensions.active[$0]?.artwork }
+        let remembered = availableArtwork.first { $0.id == appearance.selectedID }
+        adopt((enabled ? activated : nil) ?? remembered ?? .cat)
+        if let id, !enabled, settingsPage == .configuration(id) { settingsPage = .extensions }
         rebuildStatusMenu()
     }
 
+    func adopt(_ artwork: CompanionArtwork) {
+        objectWillChange.send()
+        appearance.apply(artwork)
+    }
+
     @objc func showSettings() { settings.show(CyberKukuSettingsView(host: self), activate: presentsOnScreen) }
-    @objc func showPostureSettings() {
-        settingsPage = .posture
+    @objc func showExtensions() { settingsPage = .extensions; showSettings() }
+    func showExtensionSettings(_ id: String) {
+        guard extensions.active[id]?.configuration != nil else { return }
+        settingsPage = .configuration(id)
         showSettings()
     }
 
-    @objc private func selectSkin(_ item: NSMenuItem) {
-        guard let name = item.representedObject as? String, let skin = CompanionSkin(rawValue: name) else { return }
-        adopt(skin)
-    }
-    func adopt(_ skin: CompanionSkin) {
-        objectWillChange.send()
-        appearance.skin = skin
-        for item in shapeMenu.items {
-            item.state = item.representedObject as? String == skin.rawValue ? .on : .off
+    func openPrimaryWindow() {
+        if let open = extensions.enabledEntries.compactMap({ extensions.active[$0.id]?.openWindow }).first {
+            open()
+        } else {
+            showSettings()
         }
     }
 
@@ -160,25 +112,14 @@ final class CompanionHost: NSObject, ObservableObject {
     private func rebuildStatusMenu() {
         statusMenu.items.forEach { $0.submenu = nil }
         statusMenu.removeAllItems()
-        shapeMenu.removeAllItems()
-        for skin in CompanionSkin.allCases {
-            let row = addItem(shapeMenu, skin.title, #selector(selectSkin(_:)), self)
-            row.representedObject = skin.rawValue
-            row.state = appearance.skin == skin ? .on : .off
-        }
-        let shapes = NSMenuItem(title: shapeMenu.title, action: nil, keyEquivalent: "")
-        shapes.submenu = shapeMenu
-        statusMenu.addItem(shapes)
-        if let desktop = posture.desktop {
-            let row = NSMenuItem(title: posture.title, action: nil, keyEquivalent: "")
-            row.submenu = desktop.pluginMenu
+        for entry in extensions.enabledEntries {
+            guard let makeMenu = extensions.active[entry.id]?.makeMenu else { continue }
+            let row = NSMenuItem(title: entry.title, action: nil, keyEquivalent: "")
+            row.submenu = makeMenu()
             statusMenu.addItem(row)
-        } else {
-            addItem(statusMenu, "设置注意坐姿…", #selector(showPostureSettings), self)
         }
-        statusMenu.addItem(.separator())
+        if !statusMenu.items.isEmpty { statusMenu.addItem(.separator()) }
         addItem(statusMenu, "设置…", #selector(showSettings), self)
-        addItem(statusMenu, "应用更新…", #selector(AppUpdater.showWindow(_:)), updater)
         addItem(statusMenu, "退出 CyberKuku", #selector(NSApplication.terminate(_:)), NSApp)
     }
 
@@ -202,7 +143,7 @@ final class CompanionHost: NSObject, ObservableObject {
     }
     func shutdown() {
         settings.close()
-        posture.deactivate()
+        extensions.shutdown()
         appearance.deactivate()
         output.shutdown()
         statusMenu.removeAllItems()

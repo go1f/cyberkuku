@@ -11,7 +11,7 @@ struct MonitorWindowView: View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("坐姿监测").font(.title2.weight(.semibold))
+                    Text("同学请注意坐姿！").font(.title2.weight(.semibold))
                     Text(model.isDemo ? "演示输入 · 摄像头未启动" : model.monitorSummary)
                         .font(.callout).foregroundStyle(.secondary).lineLimit(1)
                 }.frame(maxWidth: .infinity, alignment: .leading)

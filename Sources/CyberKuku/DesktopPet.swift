@@ -140,10 +140,10 @@ struct PetMenuPresentation: Equatable {
     }
     private func overlap(_ a: CGRect,_ b: CGRect) -> CGFloat { let i = a.intersection(b); return i.isNull ? 0 : i.width*i.height }
     var userHidden: Bool { hidden }
-    func useSkin(_ skin: CompanionSkin) {
-        catView.skin = skin
-        cat.title = "CyberKuku " + skin.title
-        catView.setAccessibilityLabel(skin.title + "，双击打开伙伴或监测窗口，拖到左右边缘收纳")
+    func useArtwork(_ artwork: CompanionArtwork) {
+        catView.artwork = artwork
+        cat.title = "CyberKuku " + artwork.title
+        catView.setAccessibilityLabel(artwork.title + "，双击打开伙伴或监测窗口，拖到左右边缘收纳")
     }
     private var wantsVisible: Bool { !hidden && (enabled || manuallyShown) }
     private var allowsDisplay: Bool { wantsVisible && sessionBlockers.isEmpty }
@@ -561,7 +561,7 @@ struct PetMenuPresentation: Equatable {
 
 private final class CatCompanionView: NSView {
     var onClick: () -> Void = {}, onDoubleClick: () -> Void = {}
-    var skin: CompanionSkin = .cat { didSet { needsDisplay = true } }
+    var artwork: CompanionArtwork = .cat { didSet { needsDisplay = true } }
     var breathes = true
     var fullScreenCompact = false { didSet { updateHelp(); window?.invalidateCursorRects(for:self) } }
     var onMove: (NSPoint,Bool) -> Void = { _,_ in }
@@ -593,7 +593,7 @@ private final class CatCompanionView: NSView {
         return image.cgImage(forProposedRect:nil,context:nil,hints:nil)
     }()
     private static func piece(_ rect: CGRect) -> CGImage? { original?.cropping(to:rect)?.copy(maskingColorComponents:[245,255,245,255,245,255]) }
-    private let artwork = CatCompanionView.piece(CGRect(x:220,y:40,width:540,height:910))
+    private let catArtwork = CatCompanionView.piece(CGRect(x:220,y:40,width:540,height:910))
     private static let artworkScale = (PetPlacement.companionSize.height-2*8*0.6)/910
     private static let edgeDetailMagnification: CGFloat = 1.44
 
@@ -754,7 +754,7 @@ private final class CatCompanionView: NSView {
     override func rightMouseDown(with event:NSEvent) {
         guard onHide != nil else { return }
         cancelPendingClick(); pressed = true; interactionChanged()
-        let menu = NSMenu(); let item = NSMenuItem(title:"隐藏" + skin.title + "（可从菜单栏找回）",action:#selector(hidePet),keyEquivalent:"")
+        let menu = NSMenu(); let item = NSMenuItem(title:"隐藏" + artwork.title + "（可从菜单栏找回）",action:#selector(hidePet),keyEquivalent:"")
         item.target = self; menu.addItem(item); NSMenu.popUpContextMenu(menu,with:event,for:self)
         pressed = false; interactionChanged()
     }
@@ -820,7 +820,7 @@ private final class CatCompanionView: NSView {
             c.translateBy(x:side == .left ? 0 : bounds.width,y:bounds.midY)
             if side == .right { c.scaleBy(x:-1,y:1) }
             c.translateBy(x:-(1-exposure)*bounds.width,y:0)
-            if skin == .boat { PaperBoat.draw(in: CGRect(x: -8, y: -11, width: 32, height: 23)); return }
+            if let draw = artwork.draw { draw(CGRect(x: -8, y: -11, width: 32, height: 23)); return }
             switch pose {
             case .face:
                 if let art = Self.faceArt { drawArtwork(art,centeredAt:CGPoint(x:-9,y:0),in:c) }
@@ -847,8 +847,8 @@ private final class CatCompanionView: NSView {
         let sign: Double = p<0.5 ? (facing ? -1 : 1) : (flipTo ? -1 : 1)
         let width = p<1 ? 0.18+0.82*abs(cos(.pi*p)) : 1
         c.translateBy(x:bounds.midX,y:bounds.midY); c.scaleBy(x:sign*width,y:1+0.025*sin(.pi*p)); c.translateBy(x:-bounds.midX,y:-bounds.midY)
-        if skin == .boat { PaperBoat.draw(in: bounds.insetBy(dx: 2, dy: bounds.height * 0.22)); return }
-        guard let artwork else { return }
+        if let draw = artwork.draw { draw(bounds.insetBy(dx: 2, dy: bounds.height * 0.22)); return }
+        guard let artwork = catArtwork else { return }
         let center = CGPoint(x:bounds.midX,y:bounds.midY)
         drawArtwork(artwork,centeredAt:center,in:c)
         guard breathes && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
