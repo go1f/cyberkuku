@@ -6,23 +6,20 @@ struct MonitorWindowView: View {
     @ObservedObject var desktop: DesktopCoordinator
 
     var body: some View {
-        GeometryReader { layout in
-            let width = min(layout.size.width, max(0, layout.size.height - 114) * 16 / 9)
-            VStack(spacing: 14) {
-                instrumentBar
-                mediaConsole(width: width)
-            }
-            .frame(width: width)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        VStack(spacing: 8) {
+            instrumentBar
+            video.clipShape(RoundedRectangle(cornerRadius: 10))
         }
-        .padding(16)
+        .padding(10)
         .frame(minWidth: 720, minHeight: 520)
         .background(Color(nsColor: .windowBackgroundColor))
         .transaction { $0.animation = nil }
     }
 
     private var instrumentBar: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
+            monitoringControl
+            separator
             metric("头部偏移", model.rollDeviation)
             separator
             metric("肩线偏移", model.shoulderDeviation)
@@ -42,24 +39,27 @@ struct MonitorWindowView: View {
                 }
             }
 
-            Spacer(minLength: 0)
-
-            VStack(alignment: .trailing, spacing: 4) {
-                Label(model.monitorSummary, systemImage: model.hasStarted ? "waveform" : "pause.circle")
-                    .font(.callout.weight(.medium))
-                    .lineLimit(1)
-                Text(statusDetail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: 200, alignment: .trailing)
-            .help([model.monitorDetail, model.habitTimingSummary].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n"))
-            .accessibilityElement(children: .combine)
+            Spacer(minLength: 2)
+            previewControls
         }
-        .padding(.horizontal, 12)
-        .frame(height: 58)
-        .background(.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 4)
+        .frame(height: 48)
+    }
+
+    private var monitoringControl: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button(action: model.toggleMonitoring) {
+                Label(model.hasStarted ? "暂停监测" : "开始监测", systemImage: model.hasStarted ? "pause.fill" : "play.fill")
+            }
+            .controlSize(.small)
+            .help("按空格开始或暂停监测")
+            Text(model.monitorSummary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .help(statusDetail)
+        }
+        .frame(width: 104, alignment: .leading)
     }
 
     private var statusDetail: String {
@@ -92,60 +92,36 @@ struct MonitorWindowView: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title).font(.caption).foregroundStyle(.secondary)
             Text(value.map { String(format: "%+.1f°", $0) } ?? "—")
-                .font(.system(size: 22, weight: .medium, design: .rounded))
+                .font(.system(size: 19, weight: .medium, design: .rounded))
                 .monospacedDigit()
         }
-        .frame(width: 83, alignment: .leading)
+        .frame(width: 64, alignment: .leading)
         .accessibilityElement(children: .combine)
     }
 
-    private func mediaConsole(width: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            video.frame(height: width * 9 / 16)
-            Divider()
-            playbackBar
-        }
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(.primary.opacity(0.10)) }
-    }
-
-    private var playbackBar: some View {
-        HStack(spacing: 10) {
-            Button(action: model.toggleMonitoring) {
-                Label(model.hasStarted ? "暂停监测" : "开始监测", systemImage: model.hasStarted ? "pause.fill" : "play.fill")
-                    .font(.callout.weight(.medium))
+    private var previewControls: some View {
+        ControlGroup {
+            Menu {
+                Toggle("镜像预览", isOn: $model.mirrored)
+                    .disabled(model.settings.dualPreview)
+                Toggle("双画面对照", isOn: $model.settings.dualPreview)
+                Toggle("显示关键点", isOn: $model.settings.showsPreviewLandmarks)
+            } label: {
+                Label("画面选项", systemImage: "rectangle.on.rectangle")
             }
-            .help("按空格开始或暂停监测")
-
-            Spacer(minLength: 0)
-
-            ControlGroup {
-                Menu {
-                    Toggle("镜像预览", isOn: $model.mirrored)
-                        .disabled(model.settings.dualPreview)
-                    Toggle("双画面对照", isOn: $model.settings.dualPreview)
-                    Toggle("显示关键点", isOn: $model.settings.showsPreviewLandmarks)
-                } label: {
-                    Label("画面选项", systemImage: "rectangle.on.rectangle")
-                }
-                .help("画面选项")
-                Button(action: desktop.collapseMainToPiP) {
-                    Label("画中画", systemImage: "pip.enter")
-                }
-                .disabled(!model.status.isActive || model.isDemo)
-                .help("画中画")
-                Button(action: desktop.showSettings) {
-                    Label("坐姿设置", systemImage: "gearshape")
-                }
-                .help("坐姿设置")
+            .help("画面选项")
+            Button(action: desktop.collapseMainToPiP) {
+                Label("画中画", systemImage: "pip.enter")
             }
-            .labelStyle(.iconOnly)
-            .fixedSize()
+            .disabled(!model.status.isActive || model.isDemo)
+            .help("画中画")
+            Button(action: desktop.showSettings) {
+                Label("坐姿设置", systemImage: "gearshape")
+            }
+            .help("坐姿设置")
         }
-        .buttonStyle(.borderless)
-        .padding(.horizontal, 12)
-        .frame(height: 40)
+        .labelStyle(.iconOnly)
+        .fixedSize()
     }
 
     private var video: some View {

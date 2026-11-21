@@ -79,7 +79,7 @@ enum CompanionHostChecks {
         precondition(NSApp.sendAction(settingsItem.action!, to: settingsItem.target, from: settingsItem))
         let window = host.settingsWindow!
         window.contentView?.layoutSubtreeIfNeeded()
-        precondition(window.toolbar == nil && !window.styleMask.contains(.fullSizeContentView))
+        precondition(window.styleMask.contains(.fullSizeContentView), "Settings must extend into the title bar")
         host.showUpdateSettings()
         precondition(host.settingsPage == .updates && host.settingsWindow === window)
         let pluginSettings = submenu.item(withTitle: "坐姿设置…")!

@@ -8,8 +8,10 @@ final class SettingsWindowController {
     func show<Content: View>(_ content: @autoclosure () -> Content, activate: Bool = true) {
         if window == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 750, height: 550),
-                                  styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+                                  styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
             window.title = "CyberKuku 设置"
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
             window.contentMinSize = NSSize(width: 620, height: 460)
             window.isReleasedWhenClosed = false
             let view = NSHostingView(rootView: content())
@@ -41,7 +43,7 @@ struct SettingsForm<Content: View>: View {
     var body: some View {
         Form { content }
             .formStyle(.grouped)
-            .background(Color(nsColor: .windowBackgroundColor))
+            .scrollContentBackground(.hidden)
     }
 }
 
@@ -53,9 +55,11 @@ struct CyberKukuSettingsView: View {
             sidebar
                 .frame(width: 208)
             Divider()
-            detail
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(.top, 8)
+            VStack(spacing: 0) {
+                pageHeader
+                detail.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+            .background(Color(nsColor: .controlBackgroundColor))
         }
         .background(Color(nsColor: .windowBackgroundColor))
     }
@@ -83,10 +87,11 @@ struct CyberKukuSettingsView: View {
             }
             .padding(10)
         }
-        .background(.regularMaterial)
+        .background(.regularMaterial, ignoresSafeAreaEdges: .top)
     }
 
     private func sidebarRow(_ title: String, symbol: String, page: CompanionHost.SettingsPage) -> some View {
+        let color: Color = page == .companion ? .brown : page == .extensions ? .indigo : .teal
         let selected = host.settingsPage == page || (page == .companion && host.settingsPage == .updates)
         return Button {
             host.settingsPage = page
@@ -94,21 +99,48 @@ struct CyberKukuSettingsView: View {
             HStack(spacing: 8) {
                 Image(systemName: symbol)
                     .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(Color(nsColor: .secondaryLabelColor))
-                    .frame(width: 20)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 23, height: 23)
+                    .background(color.gradient, in: RoundedRectangle(cornerRadius: 6))
                     .accessibilityHidden(true)
                 Text(title)
                     .fontWeight(selected ? .semibold : .regular)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(selected ? Color.white : Color.primary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(.primary.opacity(selected ? 0.09 : 0), in: RoundedRectangle(cornerRadius: 8))
+            .background(selected ? Color(nsColor: .selectedContentBackgroundColor) : .clear, in: RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private var pageHeader: some View {
+        HStack(spacing: 10) {
+            if host.settingsPage == .updates {
+                Button {
+                    host.settingsPage = .companion
+                } label: {
+                    Label("返回伙伴", systemImage: "chevron.left").labelStyle(.iconOnly)
+                }
+            }
+            Text(pageTitle).font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .frame(height: 38)
+    }
+
+    private var pageTitle: String {
+        switch host.settingsPage ?? .companion {
+        case .companion: "伙伴"
+        case .updates: "软件更新"
+        case .extensions: "拓展"
+        case .configuration(let id): host.extensions.enabledEntries.first { $0.id == id }?.title ?? "插件配置"
+        }
     }
 
     @ViewBuilder private var detail: some View {
@@ -116,17 +148,7 @@ struct CyberKukuSettingsView: View {
         case .companion:
             companionSettings
         case .updates:
-            VStack(alignment: .leading, spacing: 0) {
-                Button {
-                    host.settingsPage = .companion
-                } label: {
-                    Label("伙伴", systemImage: "chevron.left")
-                }
-                .buttonStyle(.borderless)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
-                AppUpdateSettingsView(updater: host.updater)
-            }
+            AppUpdateSettingsView(updater: host.updater)
         case .extensions:
             ExtensionsSettings(manager: host.extensions)
         case .configuration(let id):
@@ -150,10 +172,16 @@ struct CyberKukuSettingsView: View {
                 }
             }
             Section("应用") {
-                LabeledContent("版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
                 Button(action: host.showUpdateSettings) {
-                    Label("应用更新", systemImage: "arrow.triangle.2.circlepath")
+                    HStack {
+                        Label("软件更新", systemImage: "arrow.triangle.2.circlepath")
+                        Spacer()
+                        Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
     }

@@ -45,6 +45,8 @@ final class AppUpdater: NSObject, ObservableObject {
     @Published private(set) var automaticallyChecks = true
     @Published private(set) var lastCheck: Date?
     @Published private(set) var message = "后台每天检查一次；发现新版后由你选择安装。"
+    @Published private(set) var isUpToDate = false
+    @Published private(set) var operationError: String?
     @Published private(set) var available: UpdateManifest?
     @Published private(set) var readyPlan: UpdateInstallPlan?
     private let defaults: UserDefaults
@@ -115,7 +117,7 @@ final class AppUpdater: NSObject, ObservableObject {
     }
     func startCheck(manual: Bool) {
         guard canCheck, readyPlan == nil else { return }
-        downloadProgress = nil; cancellationRequested = false; setPhase(.checking); message = phase.label
+        operationError = nil; isUpToDate = false; downloadProgress = nil; cancellationRequested = false; setPhase(.checking); message = phase.label
         defaults.set(Date(), forKey: "nativeUpdateLastAttempt")
         task = Task { [weak self] in
             guard let self else { return }
@@ -125,7 +127,7 @@ final class AppUpdater: NSObject, ObservableObject {
                 try Task.checkCancellation()
                 lastCheck = Date(); defaults.set(lastCheck, forKey: "nativeUpdateLastSuccess")
                 let build = Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0") ?? 0
-                guard item.build > build else { available = nil; message = "当前已是最新版本。"; return }
+                guard item.build > build else { available = nil; isUpToDate = true; message = "当前已是最新版本。"; return }
                 guard item.supports(os: ProcessInfo.processInfo.operatingSystemVersion) else { throw UpdateFailure.unsupportedOS }
                 if !manual, defaults.integer(forKey: "nativeUpdateSkippedBuild") == item.build {
                     message = "已跳过版本 \(item.version)，可以手动检查再次查看。"; return
@@ -133,7 +135,7 @@ final class AppUpdater: NSObject, ObservableObject {
                 available = item; message = "发现新版本 \(item.version)，可以下载安装。"
             } catch {
                 if Task.isCancelled { message = "已取消，当前应用未改动。" }
-                else { message = "检查失败：\(error.localizedDescription)" }
+                else { message = "检查失败：\(error.localizedDescription)"; operationError = message }
             }
         }
     }
@@ -142,6 +144,7 @@ final class AppUpdater: NSObject, ObservableObject {
         defaults.set(item.build, forKey: "nativeUpdateSkippedBuild")
         if let plan = readyPlan { try? FileManager.default.removeItem(atPath: plan.workspace) }
         readyPlan = nil; downloadedWorkspace = nil; available = nil
+        operationError = nil
         message = "已跳过该版本；手动检查仍可查看。"; setPhase(.idle)
     }
     func cancel() {
@@ -158,6 +161,7 @@ final class AppUpdater: NSObject, ObservableObject {
     }
     func downloadUpdate() {
         guard !busy, let item = available, readyPlan == nil else { return }
+        operationError = nil
         let operation = UUID(); operationID = operation; lastProgressAt = -Double.infinity
         cancellationRequested = false
         downloadProgress = UpdateDownloadProgress(received: 0, total: item.size)
@@ -191,6 +195,7 @@ final class AppUpdater: NSObject, ObservableObject {
                 if phase == .installing { setPhase(.idle) }
                 message = Task.isCancelled ? "已取消，当前应用未改动。"
                     : readyPlan != nil ? "安装未启动：\(error.localizedDescription)" : "下载或验证失败：\(error.localizedDescription)"
+                if !Task.isCancelled { operationError = message }
             }
         }
     }
@@ -239,8 +244,13 @@ final class AppUpdater: NSObject, ObservableObject {
     }
     func installAndRestart() {
         guard !busy, let plan = readyPlan else { return }
+        operationError = nil
         do { try beginInstallation(plan) }
-        catch { setPhase(.idle); message = "安装未启动：\(error.localizedDescription)" }
+        catch {
+            setPhase(.idle)
+            message = "安装未启动：\(error.localizedDescription)"
+            operationError = message
+        }
     }
     private static func launchInstaller(_ plan: UpdateInstallPlan) throws {
         let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/CyberKukuUpdateInstaller")
@@ -269,55 +279,64 @@ final class AppUpdater: NSObject, ObservableObject {
 
 struct AppUpdateSettingsView: View {
     @ObservedObject var updater: AppUpdater
+
     var body: some View {
         SettingsForm {
-            Section("应用更新") {
-                LabeledContent("当前版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")
-                    .contextMenu {
-                        Button("和小兽打个招呼", action: updater.showMascot)
+            Section {
+                HStack {
+                    if updater.busy {
+                        Text(updater.phase.label)
+                        Spacer()
+                        if updater.downloadProgress == nil || updater.phase != .downloading {
+                            ProgressView().controlSize(.small)
+                        } else if let progress = updater.downloadProgress {
+                            Text("\(progress.percent)%").monospacedDigit().foregroundStyle(.secondary)
+                        }
+                    } else if let item = updater.available {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("CyberKuku \(item.version)").fontWeight(.medium)
+                            Text(ByteCountFormatter.string(fromByteCount: item.size, countStyle: .file))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if updater.readyPlan != nil {
+                            Button("重试安装", action: updater.installAndRestart)
+                        } else {
+                            Button("现在更新", action: updater.downloadUpdate)
+                        }
+                    } else {
+                        Text(updater.isUpToDate ? "已是最新版本" : "软件更新")
+                        Spacer()
+                        Button("检查更新") { updater.startCheck(manual: true) }
+                            .disabled(!updater.canCheck)
                     }
-                Toggle("自动检查新版本", isOn: Binding(get: { updater.automaticallyChecks }, set: updater.setAutomaticChecks))
-                    .disabled(!updater.enabled)
-                Text("每天在后台检查一次。")
-                    .font(.caption).foregroundStyle(.secondary)
-                Button("检查更新…", action: { updater.startCheck(manual: true) }).disabled(!updater.canCheck)
-                if let item = updater.available {
-                    Text("新版本 \(item.version)").font(.headline)
-                    Text(item.notes).font(.caption).textSelection(.enabled)
-                    if updater.readyPlan == nil, !updater.busy {
-                        Button("下载安装更新") { updater.downloadUpdate() }
-                        Text("点击后将下载、校验并自动安装，完成时会重新启动应用。")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    if !updater.busy { Button("跳过这个版本") { updater.skipVersion() } }
                 }
-                if updater.readyPlan != nil, !updater.busy {
-                    Button("重试安装并重新启动") { updater.installAndRestart() }
+                if let item = updater.available, !updater.busy {
+                    DisclosureGroup("更新详情") {
+                        Text(item.notes).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                        Button("跳过这个版本", action: updater.skipVersion)
+                    }
                 }
                 if updater.phase == .downloading, let progress = updater.downloadProgress {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("正在下载安装包")
-                            Spacer()
-                            Text("\(progress.percent)%").monospacedDigit()
-                        }
-                        ProgressView(value: progress.fraction).progressViewStyle(.linear)
-                            .accessibilityLabel("安装包下载进度").accessibilityValue("\(progress.percent)%")
-                        Text(progress.sizes).font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                    }
-                } else if updater.busy { ProgressView(updater.phase.label) }
-                if updater.busy, updater.phase != .installing {
-                    Button(updater.cancellationRequested ? "正在取消…" : "取消更新") { updater.cancel() }
+                    ProgressView(value: progress.fraction)
+                        .accessibilityLabel("安装包下载进度")
+                        .accessibilityValue("\(progress.percent)%")
+                }
+                if updater.canCancel || updater.cancellationRequested {
+                    Button(updater.cancellationRequested ? "正在取消…" : "取消", action: updater.cancel)
                         .disabled(!updater.canCancel)
                 }
-                Text(updater.message).font(.callout).textSelection(.enabled)
-                if let date = updater.lastCheck {
-                    Text("上次检查：\(date.formatted(date: .abbreviated, time: .shortened))")
-                        .font(.caption).foregroundStyle(.secondary)
+                if let error = updater.operationError, !updater.busy {
+                    Text(error).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                 }
             }
             Section {
-                Link("查看 GitHub 发布记录", destination: URL(string: "https://github.com/go1f/cyberkuku/releases")!)
+                LabeledContent("已安装", value: "CyberKuku " + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"))
+                    .contextMenu { Button("和小兽打个招呼", action: updater.showMascot) }
+            }
+            Section {
+                Toggle("自动检查更新", isOn: Binding(get: { updater.automaticallyChecks }, set: updater.setAutomaticChecks))
+                    .disabled(!updater.enabled)
             }
         }
     }
