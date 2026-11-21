@@ -178,12 +178,27 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
             video.layer?.masksToBounds = true
             video.onDoubleClick = { [weak self] in self?.expandPiP() }
             video.setAccessibilityLabel("摄像头视频，双击返回监测窗口")
-            let restore = NSButton(title: "返回监控窗口", target: self, action: #selector(expandPiP))
+            let restoreLabel = "返回监控窗口"
+            let restore = NSButton(
+                image: NSImage(systemSymbolName: "pip.exit", accessibilityDescription: restoreLabel)
+                    ?? NSImage(named: NSImage.revealFreestandingTemplateName)
+                    ?? NSImage(),
+                target: self,
+                action: #selector(expandPiP)
+            )
+            restore.imagePosition = .imageOnly
+            restore.bezelStyle = .push
+            restore.controlSize = .large
+            restore.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 17, weight: .medium)
+            restore.toolTip = restoreLabel
+            restore.setAccessibilityLabel(restoreLabel)
             restore.translatesAutoresizingMaskIntoConstraints = false
             video.addSubview(restore)
             NSLayoutConstraint.activate([
                 restore.topAnchor.constraint(equalTo: video.topAnchor, constant: 10),
-                restore.trailingAnchor.constraint(equalTo: video.trailingAnchor, constant: -10)
+                restore.trailingAnchor.constraint(equalTo: video.trailingAnchor, constant: -10),
+                restore.widthAnchor.constraint(equalToConstant: 48),
+                restore.heightAnchor.constraint(equalToConstant: 38)
             ])
             panel.contentView = video
             panel.delegate = self
@@ -336,7 +351,8 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
             && pipPanel?.titlebarAppearsTransparent == true
             && pipPanel?.standardWindowButton(.closeButton)?.isHidden == true
             && pipVideo?.layer?.cornerRadius == 12 && pipVideo?.layer?.masksToBounds == true,
-         "pipHasRestoreButton": pipVideo?.subviews.contains { ($0 as? NSButton)?.action == #selector(expandPiP) } == true,
+         "pipHasRestoreButton": pipVideo?.subviews.contains { guard let button = $0 as? NSButton else { return false }
+            return button.action == #selector(expandPiP) && button.imagePosition == .imageOnly && button.image != nil } == true,
          "pipIsNativeVideo": pipPanel?.contentView === pipVideo && pipVideo != nil,
          "pipFrame": pipPanel.map { NSStringFromRect($0.frame) } ?? "",
          "pipDisplayID": pipPanel?.screen.map { router.identifier($0) } ?? ""]
