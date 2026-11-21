@@ -5,10 +5,11 @@ import SwiftUI
 @MainActor
 enum PostureExtension {
     static let id = "posture"
+    static let title = "同学请注意坐姿！"
 
     static var registration: ExtensionRegistration {
         ExtensionRegistration(
-            id: id, title: "同学请注意坐姿！",
+            id: id, title: title,
             detail: "用本机摄像头观察坐姿，通过桌面伙伴提醒。",
             symbol: "figure.seated.side"
         ) { context in

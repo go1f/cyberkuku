@@ -80,6 +80,8 @@ enum CompanionHostChecks {
         let window = host.settingsWindow!
         window.contentView?.layoutSubtreeIfNeeded()
         precondition(window.toolbar == nil && !window.styleMask.contains(.fullSizeContentView))
+        host.showUpdateSettings()
+        precondition(host.settingsPage == .updates && host.settingsWindow === window)
         let pluginSettings = submenu.item(withTitle: "坐姿设置…")!
         precondition(NSApp.sendAction(pluginSettings.action!, to: pluginSettings.target, from: pluginSettings))
         precondition(host.settingsWindow === window && host.settingsPage == .configuration(posture.id))
@@ -87,7 +89,7 @@ enum CompanionHostChecks {
             let folder = URL(fileURLWithPath: path, isDirectory: true)
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             for (page, filename) in [(CompanionHost.SettingsPage.companion, "companion"),
-                                     (.extensions, "extensions"), (.configuration(posture.id), "posture")] {
+                                     (.extensions, "extensions"), (.updates, "updates"), (.configuration(posture.id), "posture")] {
                 host.settingsPage = page
                 if filename == "posture" { window.setContentSize(NSSize(width: 750, height: 855)) }
                 try await Task.sleep(for: .milliseconds(80))

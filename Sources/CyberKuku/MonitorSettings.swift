@@ -1,21 +1,6 @@
 import Foundation
 import PostureCore
 
-enum PiPSize: String, Codable, CaseIterable, Identifiable {
-    case small, medium, large
-    var id: String { rawValue }
-    var label: String { switch self { case .small: return "小"; case .medium: return "中"; case .large: return "大" } }
-    var width: Double { switch self { case .small: return 360; case .medium: return 440; case .large: return 560 } }
-    var height: Double { switch self { case .small: return 340; case .medium: return 390; case .large: return 460 } }
-}
-enum PiPCorner: String, Codable, CaseIterable, Identifiable {
-    case topRight, topLeft, bottomRight, bottomLeft
-    var id: String { rawValue }
-    var label: String {
-        switch self { case .topRight: return "右上"; case .topLeft: return "左上"; case .bottomRight: return "右下"; case .bottomLeft: return "左下" }
-    }
-}
-
 enum PostureSensitivity: Int, CaseIterable, Identifiable {
     case high, balanced, relaxed
     var id: Self { self }
@@ -38,16 +23,15 @@ struct MonitorSettings: Codable, Equatable {
     var oralPoseMonitoring = true
     var jawSelfCheck = true
     var bodyBackend: BodyBackend = .mediaPipe
-    var pipOnTop = true
-    var pipShowsVideo = true
-    var pipShowsSkeleton = true
-    var pipSize: PiPSize = .small
-    var pipCorner: PiPCorner = .topRight
-    var pipScreenID = "automatic"
     var pipPlacement: FloatingWindowPlacement?
     var resumeOnLaunch = true
     var mirrored = false
     var dualPreview = false
+    private var previewLandmarks: Bool?
+    var showsPreviewLandmarks: Bool {
+        get { previewLandmarks ?? true }
+        set { previewLandmarks = newValue }
+    }
     private var openPreviewOnCompanionDoubleClick: Bool?
     var companionDoubleClickOpensPreview: Bool {
         get { openPreviewOnCompanionDoubleClick ?? true }

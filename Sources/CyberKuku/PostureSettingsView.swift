@@ -6,7 +6,7 @@ struct PostureSettingsForm: View {
     @ObservedObject var desktop: DesktopCoordinator
 
     var body: some View {
-        Form {
+        SettingsForm {
             Section("监测窗口") {
                 Button("打开监测窗口…", action: desktop.openMain)
                 Toggle("双击伙伴打开坐姿预览", isOn: $model.settings.companionDoubleClickOpensPreview)
@@ -49,12 +49,11 @@ struct PostureSettingsForm: View {
                 Button("个人动作示范…") { desktop.showingOralSamples = true }
             }
         }
-        .formStyle(.grouped)
         .sheet(isPresented: $desktop.showingOralSamples, onDismiss: { if model.oralSamples.isRecording { model.cancelOralRecording() } }) {
             VStack(spacing: 0) {
-                Form {
+                SettingsForm {
                     OralSampleSettingsView(model: model, store: model.oralSamples)
-                }.formStyle(.grouped)
+                }
                 Button("完成") { desktop.showingOralSamples = false }
                     .keyboardShortcut(.defaultAction)
                     .padding()

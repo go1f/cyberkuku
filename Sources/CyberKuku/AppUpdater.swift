@@ -35,7 +35,7 @@ struct UpdateDownloadProgress {
 }
 
 @MainActor
-final class AppUpdater: NSObject, ObservableObject, NSMenuItemValidation {
+final class AppUpdater: NSObject, ObservableObject {
     @Published private(set) var canCheck = false
     @Published private(set) var phase: AppUpdatePhase = .idle
     @Published private(set) var downloadProgress: UpdateDownloadProgress?
@@ -54,7 +54,6 @@ final class AppUpdater: NSObject, ObservableObject, NSMenuItemValidation {
     private var lastProgressAt = -Double.infinity
     private var timer: Timer?
     private var task: Task<Void, Never>?
-    private var updateWindow: NSWindow?
     private var mascotWindow: NSWindow?
     private var downloadedWorkspace: URL?
     let enabled: Bool
@@ -92,9 +91,6 @@ final class AppUpdater: NSObject, ObservableObject, NSMenuItemValidation {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("CyberKuku/update-status.txt")
     }
-    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        menuItem.action == #selector(showWindow(_:)) || canCheck
-    }
     func setAutomaticChecks(_ enabled: Bool) {
         automaticallyChecks = enabled; defaults.set(enabled, forKey: "nativeUpdateAutomatic")
         if !enabled, busy, available == nil { cancel() }
@@ -116,10 +112,6 @@ final class AppUpdater: NSObject, ObservableObject, NSMenuItemValidation {
         guard automaticallyChecks, !busy else { return }
         let attempt = defaults.object(forKey: "nativeUpdateLastAttempt") as? Date ?? .distantPast
         if Date().timeIntervalSince(attempt) >= 86400 { startCheck(manual: false) }
-    }
-    @objc func checkForUpdates(_ sender: Any? = nil) {
-        guard canCheck else { return }
-        showWindow(); startCheck(manual: true)
     }
     func startCheck(manual: Bool) {
         guard canCheck, readyPlan == nil else { return }
@@ -272,32 +264,23 @@ final class AppUpdater: NSObject, ObservableObject, NSMenuItemValidation {
         }
         NSApplication.shared.activate(ignoringOtherApps: true); mascotWindow?.makeKeyAndOrderFront(nil)
     }
-    @objc func showWindow(_ sender: Any? = nil) {
-        if updateWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 580, height: 560),
-                styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
-            window.title = "CyberKuku 更新"; window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: AppUpdateSettingsView(updater: self))
-            window.center(); updateWindow = window
-        }
-        NSApplication.shared.activate(ignoringOtherApps: true); updateWindow?.makeKeyAndOrderFront(nil)
-    }
+
 }
 
 struct AppUpdateSettingsView: View {
     @ObservedObject var updater: AppUpdater
     var body: some View {
-        Form {
-            Section("CyberKuku") {
-                Text("版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")")
+        SettingsForm {
+            Section("应用更新") {
+                LabeledContent("当前版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")
                     .contextMenu {
                         Button("和小兽打个招呼", action: updater.showMascot)
                     }
                 Toggle("自动检查新版本", isOn: Binding(get: { updater.automaticallyChecks }, set: updater.setAutomaticChecks))
                     .disabled(!updater.enabled)
-                Text("每天在后台检查，不自动安装，也不会上传摄像头画面、校准数据或口部示范。")
+                Text("每天在后台检查一次。")
                     .font(.caption).foregroundStyle(.secondary)
-                Button("检查更新…", action: { updater.checkForUpdates() }).disabled(!updater.canCheck)
+                Button("检查更新…", action: { updater.startCheck(manual: true) }).disabled(!updater.canCheck)
                 if let item = updater.available {
                     Text("新版本 \(item.version)").font(.headline)
                     Text(item.notes).font(.caption).textSelection(.enabled)
@@ -333,13 +316,10 @@ struct AppUpdateSettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Section("安装与重新启动") {
-                Text("发现新版本后可以立即更新、稍后提醒或跳过该版本。点击“下载安装更新”后无需再次确认，下载和校验通过即安装并重新启动。镜像选择、敏感度、校准和个人示范都会保留。")
-                Text("如果正从安装镜像中运行，请先把应用拖到“应用程序”。")
-                    .font(.caption).foregroundStyle(.secondary)
+            Section {
                 Link("查看 GitHub 发布记录", destination: URL(string: "https://github.com/go1f/cyberkuku/releases")!)
             }
-        }.formStyle(.grouped)
+        }
     }
 }
 

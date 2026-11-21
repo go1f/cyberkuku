@@ -121,9 +121,9 @@ final class ReminderChecks {
         if case .recovering = engine.state {} else { expectTrue(false) }
     }
     func testCompactPiPHeightScalesWithVideoWidth() {
-        expectEqual(WindowLayout.pipHeight(width: 360, visual: true), 299.25, accuracy: 0.001)
-        expectEqual(WindowLayout.pipHeight(width: 440, visual: true), 344.25, accuracy: 0.001)
-        expectEqual(WindowLayout.pipHeight(width: 360, visual: false), 100, accuracy: 0.001)
+        expectEqual(WindowLayout.pipHeight(width: 360), 202.5, accuracy: 0.001)
+        expectEqual(WindowLayout.pipHeight(width: 440), 247.5, accuracy: 0.001)
+        expectEqual(WindowLayout.pipHeight(width: 240), 135, accuracy: 0.001)
     }
     func testHeadOnlyCanRemindWithoutShoulders() {
         var engine = ReminderEngine()

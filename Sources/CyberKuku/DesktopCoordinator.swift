@@ -22,6 +22,7 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
     private let standaloneSettings = SettingsWindowController()
     var openPostureSettings: (() -> Void)?
     private var pipPanel: MonitorPanel?
+    private var pipVideo: CameraPreviewNSView?
     private var placingPiP = false
     private var lastPlacedFrame: NSRect?
     private var placementWork: DispatchWorkItem?
@@ -64,24 +65,13 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
             model.onReminderEvent = { [weak self] event in self?.reminders.handle(event) }
             model.onReminderAlertsChanged = { [weak self] update in self?.reminders.synchronize(update) }
         }
-        model.onSettingsChanged = { [weak self] old, new in
-            guard let self else { return }
-            if self.pipPanel == nil {
-                if old.pipCorner != new.pipCorner || old.pipScreenID != new.pipScreenID {
-                    self.model.settings.pipPlacement = nil
-                } else if old.pipSize != new.pipSize, let saved = self.model.settings.pipPlacement {
-                    self.model.settings.pipPlacement = saved.changingWidth(new.pipSize.width)
-                }
-            }
-            if old.pipSize != new.pipSize || old.pipCorner != new.pipCorner || old.pipScreenID != new.pipScreenID
-                || old.pipShowsVideo != new.pipShowsVideo || old.pipShowsSkeleton != new.pipShowsSkeleton {
-                self.placePiP(presetSize: old.pipSize != new.pipSize,
-                              explicitPosition: old.pipCorner != new.pipCorner || old.pipScreenID != new.pipScreenID)
-            }
-            self.pipPanel?.level = new.pipOnTop ? .floating : .normal
-            self.updateRendering()
-            self.statusPanel.updateGeometry()
+        model.onSettingsChanged = { [weak self] _, _ in
+            self?.updateRendering()
+            self?.statusPanel.updateGeometry()
         }
+        model.$status.removeDuplicates().sink { [weak self] status in
+            self?.updatePiPVideo(cameraActive: status.isActive)
+        }.store(in: &subscriptions)
         model.onWindowClosed = { [weak self] in self?.mainVisible = false; self?.updateRendering() }
         model.$previewExpanded.removeDuplicates().sink { [weak self] _ in
             DispatchQueue.main.async { self?.updateRendering() }
@@ -133,7 +123,7 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
         if mainWindow == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 940, height: 690),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            window.title = "CyberKuku"
+            window.title = PostureExtension.title
             window.isReleasedWhenClosed = false
             let host = NSHostingView(rootView: MonitorWindowView(model: model, desktop: self))
             host.sizingOptions = []
@@ -155,30 +145,48 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
         mainVisible = false; model.previewExpanded = false
         mainWindow?.orderOut(nil); updateRendering()
     }
-    @objc func togglePiP() { pipVisible ? hidePiP() : showPiP() }
-    func showPiP() {
+    @objc func togglePiP() {
+        if pipVisible { hidePiP() }
+        else if model.status.isActive && !model.isDemo { showPiP() }
+    }
+    func showPiP(present: Bool = true) {
         statusPanel.hide()
         if pipPanel == nil {
-            let panel = MonitorPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 340),
+            let panel = MonitorPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: WindowLayout.pipHeight(width: 360)),
                                      styleMask: [.titled, .closable, .resizable, .nonactivatingPanel], backing: .buffered, defer: false)
-            panel.title = "坐姿画中画"; panel.isReleasedWhenClosed = false
+            panel.title = "画中画"; panel.isReleasedWhenClosed = false
             panel.isFloatingPanel = true; panel.hidesOnDeactivate = false; panel.becomesKeyOnlyIfNeeded = false
+            panel.level = .floating
             panel.isMovableByWindowBackground = true
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
-            panel.contentMinSize = NSSize(width: 320, height: 240)
-            panel.contentMaxSize = NSSize(width: 800, height: 720)
-            panel.contentView = NSHostingView(rootView: PiPView(model: model, desktop: self))
+            panel.contentAspectRatio = NSSize(width: 16, height: 9)
+            panel.contentMinSize = NSSize(width: 240, height: WindowLayout.pipHeight(width: 240))
+            panel.contentMaxSize = NSSize(width: 800, height: WindowLayout.pipHeight(width: 800))
+            let video = CameraPreviewNSView(frame: .zero)
+            video.onDoubleClick = { [weak self] in self?.expandPiP() }
+            video.setAccessibilityLabel("摄像头视频，双击返回监测窗口")
+            panel.contentView = video
             panel.delegate = self
+            pipVideo = video
             pipPanel = panel
         }
         pipVisible = true
-        pipPanel?.level = model.settings.pipOnTop ? .floating : .normal
-        placePiP(); updateRendering()
-        pipPanel?.orderFrontRegardless()
+        placePiP()
+        updateRendering()
+        if present { pipPanel?.orderFrontRegardless() }
     }
-    func hidePiP() { flushPiPPlacement(); pipVisible = false; pipPanel?.orderOut(nil); updateRendering() }
+    func hidePiP() {
+        flushPiPPlacement()
+        pipVisible = false
+        pipPanel?.orderOut(nil)
+        updateRendering()
+    }
     func expandPiP() { hidePiP(); showMain(expandPreview: true) }
-    func collapseMainToPiP() { showPiP(); hideMain() }
+    func collapseMainToPiP() {
+        guard model.status.isActive, !model.isDemo else { return }
+        showPiP()
+        hideMain()
+    }
     func windowDidMove(_ notification: Notification) { queuePiPPlacement(notification) }
     func windowDidResize(_ notification: Notification) { queuePiPPlacement(notification) }
     private func queuePiPPlacement(_ notification: Notification) {
@@ -208,49 +216,41 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
     func windowDidDeminiaturize(_ notification: Notification) {
         if let window = notification.object as? NSWindow, window === mainWindow { mainVisible = true; updateRendering() }
     }
-    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        guard sender === pipPanel else { return frameSize }
-        let proposed = sender.contentRect(forFrameRect: NSRect(origin: .zero, size: frameSize))
-        let width = max(320, min(800, proposed.width))
-        let visual = model.settings.pipShowsVideo || model.settings.pipShowsSkeleton
-        let height = WindowLayout.pipHeight(width: width, visual: visual, demo: model.isDemo)
-        return sender.frameRect(forContentRect: NSRect(x: 0, y: 0, width: width, height: height)).size
-    }
-    private func placePiP(presetSize: Bool = false, explicitPosition: Bool = false) {
+    private func placePiP() {
         guard let panel = pipPanel else { return }
         flushPiPPlacement()
         let saved = model.settings.pipPlacement
-        let screen = (!explicitPosition ? saved.flatMap { placement in
+        let screen = saved.flatMap { placement in
             NSScreen.screens.first { router.identifier($0) == placement.displayID }
-        } : nil) ?? router.screen(preference: model.settings.pipScreenID)
+        } ?? router.workingScreen()
         guard let screen else { return }
         placingPiP = true; defer { placingPiP = false }
-        let visual = model.settings.pipShowsVideo || model.settings.pipShowsSkeleton
-        let requestedWidth = presetSize ? model.settings.pipSize.width : saved?.contentWidth ?? model.settings.pipSize.width
+        let area = screen.visibleFrame
         let chrome = panel.frame.height - panel.contentRect(forFrameRect: panel.frame).height
-        let heightBound = visual ? max(320, 20 + (screen.visibleFrame.height - 36 - chrome - 108 - (model.isDemo ? 20 : 0)) * 16 / 9) : 800
-        let width = min(screen.visibleFrame.width - 36, heightBound, requestedWidth)
-        panel.contentMinSize = NSSize(width: 320, height: visual ? 260 : 100)
-        panel.setContentSize(NSSize(width: width, height: WindowLayout.pipHeight(width: width, visual: visual, demo: model.isDemo)))
-        let area = screen.visibleFrame, frame = panel.frame
-        if !explicitPosition, let saved {
-            panel.setFrameOrigin(saved.origin(visibleFrame: area, windowSize: frame.size))
-        } else {
-            let left = model.settings.pipCorner == .topLeft || model.settings.pipCorner == .bottomLeft
-            let top = model.settings.pipCorner == .topLeft || model.settings.pipCorner == .topRight
-            panel.setFrameOrigin(NSPoint(x: left ? area.minX + 18 : area.maxX - frame.width - 18,
-                                        y: top ? area.maxY - frame.height - 18 : area.minY + 18))
-        }
+        let width = min(saved?.contentWidth ?? 360, area.width - 36, (area.height - chrome - 36) * 16 / 9)
+        panel.setContentSize(NSSize(width: width, height: WindowLayout.pipHeight(width: width)))
+        let frame = panel.frame
+        let origin = saved?.origin(visibleFrame: area, windowSize: frame.size)
+            ?? NSPoint(x: area.maxX - frame.width - 18, y: area.maxY - frame.height - 18)
+        panel.setFrameOrigin(origin)
         lastPlacedFrame = panel.frame
-        if explicitPosition || presetSize {
-            model.settings.pipPlacement = FloatingWindowPlacement(displayID: router.identifier(screen),
-                frame: panel.frame, visibleFrame: area, contentWidth: width)
+    }
+
+    private func updatePiPVideo(cameraActive: Bool) {
+        guard let pipVideo else { return }
+        let playing = pipVisible && cameraActive && !model.isDemo
+        pipVideo.preview.isHidden = !playing
+        if playing {
+            pipVideo.configure(session: model.cameraSession, mirrored: model.mirrored, enabled: true)
+        } else {
+            pipVideo.detach()
         }
     }
+
     private func updateRendering() {
         let full = mainVisible && model.previewExpanded
-        model.setRendering(image: full || (pipVisible && model.settings.pipShowsVideo),
-                           skeleton: full || (pipVisible && model.settings.pipShowsSkeleton))
+        model.setRendering(image: full, skeleton: full && model.settings.showsPreviewLandmarks)
+        updatePiPVideo(cameraActive: model.status.isActive)
     }
     var petMenuPresentation: PetMenuPresentation { reminders.petMenuPresentation }
     func showPet() { reminders.showPet(); statusPanel.updateGeometry() }
@@ -311,6 +311,8 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
          "pipOnTop": pipPanel?.level == .floating, "pipCanBecomeKey": pipPanel?.canBecomeKey ?? false,
          "previewImageRequested": model.renderingImageRequested, "skeletonRenderingRequested": model.renderingSkeletonRequested,
          "lastFrameHasImage": model.frame?.image != nil,
+         "pipContentAspectRatio": pipPanel.map { NSStringFromSize($0.contentAspectRatio) } ?? "",
+         "pipIsNativeVideo": pipPanel?.contentView === pipVideo && pipVideo != nil,
          "pipFrame": pipPanel.map { NSStringFromRect($0.frame) } ?? "",
          "pipDisplayID": pipPanel?.screen.map { router.identifier($0) } ?? ""]
     }

@@ -28,7 +28,7 @@ final class CompanionAppearance {
 
 @MainActor
 final class CompanionHost: NSObject, ObservableObject {
-    enum SettingsPage: Hashable { case companion, extensions, configuration(String) }
+    enum SettingsPage: Hashable { case companion, updates, extensions, configuration(String) }
     @Published var settingsPage: SettingsPage? = .companion {
         didSet {
             if settingsPage == .extensions { extensions.requestCatalog(onlyIfIdle: true) }
@@ -95,6 +95,7 @@ final class CompanionHost: NSObject, ObservableObject {
     }
 
     @objc func showSettings() { settings.show(CyberKukuSettingsView(host: self), activate: presentsOnScreen) }
+    @objc func showUpdateSettings() { settingsPage = .updates; showSettings() }
     @objc func showExtensions() { settingsPage = .extensions; showSettings() }
     func showExtensionSettings(_ id: String) {
         guard extensions.active[id]?.configuration != nil else { return }
@@ -144,7 +145,7 @@ final class CompanionHost: NSObject, ObservableObject {
         let root = NSMenu(), file = NSMenu(title: "文件")
         let appItem = NSMenuItem(); appItem.submenu = appMenu; root.addItem(appItem)
         addItem(appMenu, "设置…", #selector(showSettings), self, key: ",")
-        addItem(appMenu, "应用更新…", #selector(AppUpdater.showWindow(_:)), updater)
+        addItem(appMenu, "应用更新…", #selector(showUpdateSettings), self)
         appMenu.addItem(.separator())
         addItem(appMenu, "退出 CyberKuku", #selector(NSApplication.terminate(_:)), NSApp, key: "q")
         let fileItem = NSMenuItem(); fileItem.submenu = file; root.addItem(fileItem)

@@ -31,6 +31,20 @@ final class SettingsWindowController {
     }
 }
 
+struct SettingsForm<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        Form { content }
+            .formStyle(.grouped)
+            .background(Color(nsColor: .windowBackgroundColor))
+    }
+}
+
 struct CyberKukuSettingsView: View {
     @ObservedObject var host: CompanionHost
 
@@ -73,7 +87,7 @@ struct CyberKukuSettingsView: View {
     }
 
     private func sidebarRow(_ title: String, symbol: String, page: CompanionHost.SettingsPage) -> some View {
-        let selected = host.settingsPage == page
+        let selected = host.settingsPage == page || (page == .companion && host.settingsPage == .updates)
         return Button {
             host.settingsPage = page
         } label: {
@@ -101,6 +115,18 @@ struct CyberKukuSettingsView: View {
         switch host.settingsPage ?? .companion {
         case .companion:
             companionSettings
+        case .updates:
+            VStack(alignment: .leading, spacing: 0) {
+                Button {
+                    host.settingsPage = .companion
+                } label: {
+                    Label("伙伴", systemImage: "chevron.left")
+                }
+                .buttonStyle(.borderless)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+                AppUpdateSettingsView(updater: host.updater)
+            }
         case .extensions:
             ExtensionsSettings(manager: host.extensions)
         case .configuration(let id):
@@ -115,7 +141,7 @@ struct CyberKukuSettingsView: View {
     }
 
     private var companionSettings: some View {
-        Form {
+        SettingsForm {
             Section("桌面形象") {
                 Picker("切换形象", selection: Binding(get: { host.appearance.selectedID }, set: { id in
                     if let artwork = host.availableArtwork.first(where: { $0.id == id }) { host.adopt(artwork) }
@@ -125,9 +151,11 @@ struct CyberKukuSettingsView: View {
             }
             Section("应用") {
                 LabeledContent("版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
-                Button("应用更新…") { host.updater.showWindow() }
+                Button(action: host.showUpdateSettings) {
+                    Label("应用更新", systemImage: "arrow.triangle.2.circlepath")
+                }
             }
-        }.formStyle(.grouped)
+        }
     }
 
     private func artworkPreview(_ artwork: CompanionArtwork) -> some View {
@@ -149,7 +177,7 @@ private struct ExtensionsSettings: View {
     @ObservedObject var manager: ExtensionManager
 
     var body: some View {
-        Form {
+        SettingsForm {
             Section("已安装") {
                 if manager.installedEntries.isEmpty {
                     Text("还没有安装插件").foregroundStyle(.secondary)
@@ -186,7 +214,6 @@ private struct ExtensionsSettings: View {
                     .disabled(manager.catalogStatus == .loading)
             }
         }
-        .formStyle(.grouped)
     }
 
     private func extensionLabel(_ entry: ExtensionRegistration) -> some View {

@@ -22,6 +22,7 @@ enum DiagnosticsChecks {
             settings.sensitivity = sensitivity
             settings.mirrored = index.isMultiple(of: 2)
             settings.companionDoubleClickOpensPreview = !settings.mirrored
+            settings.showsPreviewLandmarks = index != 1
             settings.save(defaults: defaults)
             let restored = MonitorSettings.load(defaults: defaults)
             precondition(restored == settings && restored.sensitivity == sensitivity)

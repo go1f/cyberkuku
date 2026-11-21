@@ -37,14 +37,36 @@ import PostureCore
                     menuSizes.append("\(snapshot["width"]!)x\(snapshot["height"]!)")
                 }
                 precondition(Set(menuSizes).count == 1, "Status changes resized the menu")
+                @MainActor func renderMonitor(_ name: String, size: CGSize = CGSize(width: 940, height: 690),
+                                   appearance: NSAppearance.Name = .aqua) async throws {
+                    window.appearance = NSAppearance(named: appearance)
+                    window.setContentSize(size)
+                    try await Task.sleep(nanoseconds: 200_000_000)
+                    host.layoutSubtreeIfNeeded()
+                    guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
+                        throw CocoaError(.fileWriteUnknown)
+                    }
+                    host.cacheDisplay(in: host.bounds, to: bitmap)
+                    guard let data = bitmap.representation(using: .png, properties: [:]) else {
+                        throw CocoaError(.fileWriteUnknown)
+                    }
+                    try data.write(to: folder.appendingPathComponent(name + ".png"))
+                }
                 model.settings.dualPreview = true
                 model.setRendering(image: true, skeleton: true)
-                try await Task.sleep(nanoseconds: 200_000_000)
-                try NativeViewRender.png(MonitorWindowView(model: model, desktop: desktop), size: CGSize(width: 940, height: 690), to: folder.appendingPathComponent("dual-preview.png"))
+                try await renderMonitor("dual-preview")
                 model.settings.dualPreview = false
                 model.setRendering(image: true, skeleton: true)
-                try await Task.sleep(nanoseconds: 200_000_000)
-                try NativeViewRender.png(MonitorWindowView(model: model, desktop: desktop), size: CGSize(width: 940, height: 690), to: folder.appendingPathComponent("single-preview.png"))
+                try await renderMonitor("single-preview")
+                model.toggleMonitoring()
+                try await renderMonitor("paused-preview", size: CGSize(width: 720, height: 520))
+                try await renderMonitor("dark-preview", appearance: .darkAqua)
+                desktop.showPiP(present: false)
+                let pip = desktop.presentationSnapshot
+                precondition(pip["pipIsNativeVideo"] as? Bool == true)
+                precondition(NSSizeFromString(pip["pipContentAspectRatio"] as! String) == NSSize(width: 16, height: 9))
+                precondition(pip["previewImageRequested"] as? Bool == false && pip["skeletonRenderingRequested"] as? Bool == false)
+                desktop.hidePiP()
 
                 var time = 0.0
                 let banner = ReminderPanelController(router: DisplayRouter(), now: { time }, presentsOnScreen: false)
@@ -70,7 +92,8 @@ import PostureCore
                     "mirrorMenuPresent":true, "updateMenuAbsent":true, "menuSizes":menuSizes,
                     "roundedCornersPreservedAcrossRecovery":true,
                     "onlyVerifiedEpisodeTransitionsReportRecovery":true,
-                    "renders":["dual-preview.png","single-preview.png","reminder-active.png","reminder-recovering.png","reminder-complete.png","reminder-checkmark.png"]]
+                    "nativeVideoOnlyPiP":true,
+                    "renders":["dual-preview.png","single-preview.png","paused-preview.png","dark-preview.png","reminder-active.png","reminder-recovering.png","reminder-complete.png","reminder-checkmark.png"]]
                 let data = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted,.sortedKeys])
                 try data.write(to: folder.appendingPathComponent("checks.json"), options:.atomic)
                 print(String(data:data,encoding:.utf8)!)

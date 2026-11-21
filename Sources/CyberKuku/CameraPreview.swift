@@ -4,7 +4,8 @@ import AVFoundation
 
 // AVFoundation presents camera buffers directly. Model initialization and Vision requests
 // cannot block this path; no CGImage is copied into the SwiftUI observation model.
-private final class CameraPreviewNSView: NSView {
+final class CameraPreviewNSView: NSView {
+    var onDoubleClick: (() -> Void)?
     let preview = AVCaptureVideoPreviewLayer()
     var mirrored = false
     var previewEnabled = false
@@ -49,10 +50,18 @@ private final class CameraPreviewNSView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
+        layer?.backgroundColor = NSColor.black.cgColor
         preview.videoGravity = .resizeAspect
         layer?.addSublayer(preview)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override var mouseDownCanMoveWindow: Bool { onDoubleClick == nil && super.mouseDownCanMoveWindow }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { onDoubleClick != nil }
+    override func mouseUp(with event: NSEvent) {
+        if event.clickCount == 2, let onDoubleClick { onDoubleClick() }
+        else { super.mouseUp(with: event) }
+    }
+
     override func layout() { super.layout(); preview.frame = bounds; applyPreferences() }
 }
 struct CameraPreview: NSViewRepresentable {

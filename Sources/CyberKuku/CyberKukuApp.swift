@@ -17,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             PostureExtension.carryForwardInstallation()
             let host = CompanionHost(registrations: [PostureExtension.registration])
             self.host = host
-            if args.contains("--update-qa") { host.updater.showWindow() }
+            if args.contains("--update-qa") { host.showUpdateSettings() }
             if args.contains("--show-companion") { host.appearance.pet?.showByUser() }
             return
         }

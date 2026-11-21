@@ -66,6 +66,7 @@ import PostureCore
         }
         monitor.title = model.hasStarted ? "暂停监测" : "开始监测"
         pip.state = desktop.pipVisible ? .on : .off
+        pip.isEnabled = desktop.pipVisible || (model.status.isActive && !model.isDemo)
         mirror.state = model.mirrored ? .on : .off
         calibrate.title = model.calibrationProgress != nil ? "取消校准" : (model.profile == nil ? "校准 20 秒" : "重新校准 20 秒")
         calibrate.isEnabled = model.calibrationProgress != nil || model.canCalibrate
