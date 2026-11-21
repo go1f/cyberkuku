@@ -78,7 +78,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     var onFirstVideoFrame: ((Double) -> Void)?
     var previewSession: AVCaptureSession { session }
     private let session = AVCaptureSession()
-    private let sessionQueue = DispatchQueue(label: "posture.capture.session")
+    let sessionQueue = DispatchQueue(label: "posture.capture.session")
     private let captureQueue = DispatchQueue(label: "posture.capture.frames", qos: .userInitiated)
     private let analysisQueue = DispatchQueue(label: "posture.capture.face", qos: .userInitiated)
     private let bodyQueue = DispatchQueue(label: "posture.capture.body", qos: .utility)

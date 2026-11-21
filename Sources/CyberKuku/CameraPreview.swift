@@ -7,32 +7,39 @@ import AVFoundation
 final class CameraPreviewNSView: NSView {
     var onDoubleClick: (() -> Void)?
     let preview = AVCaptureVideoPreviewLayer()
-    var mirrored = false
-    var previewEnabled = false
+    private let sessionQueue: DispatchQueue
+    private weak var requestedSession: AVCaptureSession?
+    private var mirrored = false
+    private var previewEnabled = false
     private var sessionObservers: [NSObjectProtocol] = []
 
     func configure(session: AVCaptureSession, mirrored: Bool, enabled: Bool) {
         self.mirrored = mirrored
         previewEnabled = enabled
-        if preview.session !== session {
+        if requestedSession !== session {
             sessionObservers.forEach(NotificationCenter.default.removeObserver)
-            sessionObservers = [AVCaptureSession.didStartRunningNotification,
-                                AVCaptureSession.didStopRunningNotification].map { name in
-                NotificationCenter.default.addObserver(forName: name, object: session, queue: .main) { [weak self] _ in
-                    self?.applyPreferences()
-                }
-            }
-            preview.session = session
+            sessionObservers = [NotificationCenter.default.addObserver(
+                forName: AVCaptureSession.didStartRunningNotification, object: session, queue: nil
+            ) { [weak self] _ in
+                DispatchQueue.main.async { [weak self] in self?.applyPreferences() }
+            }]
+            requestedSession = session
         }
         applyPreferences()
     }
 
-    // The capture session is configured asynchronously: the preview connection may
-    // not exist when SwiftUI first sends its saved settings. Apply them again when
-    // capture starts or the view is laid out, including after a camera restart.
-    func applyPreferences() {
+    // Preview connections share the session queue with configuration and capture start/stop.
+    private func applyPreferences() {
+        guard let session = requestedSession else { return }
+        sessionQueue.async { [preview, mirrored, previewEnabled] in
+            if preview.session !== session { preview.session = session }
+            Self.applyPreferences(to: preview, mirrored: mirrored, enabled: previewEnabled)
+        }
+    }
+
+    nonisolated private static func applyPreferences(to preview: AVCaptureVideoPreviewLayer, mirrored: Bool, enabled: Bool) {
         guard let connection = preview.connection else { return }
-        connection.isEnabled = previewEnabled
+        connection.isEnabled = enabled
         if connection.isVideoRotationAngleSupported(0) { connection.videoRotationAngle = 0 }
         if connection.isVideoMirroringSupported {
             connection.automaticallyAdjustsVideoMirroring = false
@@ -43,11 +50,13 @@ final class CameraPreviewNSView: NSView {
     func detach() {
         sessionObservers.forEach(NotificationCenter.default.removeObserver)
         sessionObservers = []
-        preview.session = nil
+        requestedSession = nil
+        sessionQueue.async { [preview] in preview.session = nil }
     }
 
     deinit { sessionObservers.forEach(NotificationCenter.default.removeObserver) }
-    override init(frame frameRect: NSRect) {
+    init(frame frameRect: NSRect, sessionQueue: DispatchQueue) {
+        self.sessionQueue = sessionQueue
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.backgroundColor = NSColor.black.cgColor
@@ -63,14 +72,15 @@ final class CameraPreviewNSView: NSView {
         else { window.performDrag(with: event) }
     }
 
-    override func layout() { super.layout(); preview.frame = bounds; applyPreferences() }
+    override func layout() { super.layout(); preview.frame = bounds }
 }
 struct CameraPreview: NSViewRepresentable {
     let session: AVCaptureSession
+    let sessionQueue: DispatchQueue
     let mirrored: Bool
     let enabled: Bool
     func makeNSView(context: Context) -> NSView {
-        let view = CameraPreviewNSView(frame: .zero)
+        let view = CameraPreviewNSView(frame: .zero, sessionQueue: sessionQueue)
         view.configure(session: session, mirrored: mirrored, enabled: enabled)
         return view
     }

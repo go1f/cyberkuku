@@ -64,6 +64,7 @@ import PostureCore
                 desktop.showPiP(present: false)
                 let pip = desktop.presentationSnapshot
                 precondition(pip["pipIsNativeVideo"] as? Bool == true)
+                precondition(pip["pipHasRestoreButton"] as? Bool == true)
                 precondition(pip["pipIsTitlelessAndRounded"] as? Bool == true && pip["pipOnTop"] as? Bool == true)
                 precondition(NSSizeFromString(pip["pipContentAspectRatio"] as! String) == NSSize(width: 16, height: 9))
                 precondition(pip["previewImageRequested"] as? Bool == false && pip["skeletonRenderingRequested"] as? Bool == false)

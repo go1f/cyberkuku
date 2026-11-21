@@ -78,6 +78,7 @@ final class DiagnosticModel: ObservableObject {
     private var cpuOrigin = 0.0
     private var requestedStartAt: Double?
     private var nextJawCheck: Double?
+    var cameraSessionQueue: DispatchQueue { camera.sessionQueue }
     var cameraSession: AVCaptureSession { camera.previewSession }
     @Published private(set) var computeSummary = "Apple Vision 自动调度"
     var facialReferenceAvailable: Bool { (monitoringBaseline ?? matchingProfile)?.facialReference != nil }

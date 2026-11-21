@@ -17,50 +17,56 @@ struct MonitorWindowView: View {
     }
 
     private var instrumentBar: some View {
-        HStack(spacing: 12) {
-            monitoringControl
-            separator
-            metric("头部偏移", model.rollDeviation)
-            separator
-            metric("肩线偏移", model.shoulderDeviation)
-            separator
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("坐姿参考").font(.caption).foregroundStyle(.secondary)
-                HStack(spacing: 8) {
-                    Picker("观看情境", selection: $model.selectedContext) {
-                        ForEach(ViewingContext.allCases) { Text($0.label).tag($0) }
-                    }
-                    .labelsHidden()
-                    .accessibilityLabel("坐姿参考")
-                    .disabled(model.calibrationProgress != nil || model.oralSamples.isRecording)
-                    .fixedSize()
-                    calibrationButton
+        VStack(spacing: 8) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 18) {
+                    primaryControls
+                    Spacer(minLength: 18)
+                    previewControls
+                }
+                .frame(minWidth: 744)
+                HStack {
+                    primaryControls
+                    Spacer(minLength: 0)
                 }
             }
-
-            Spacer(minLength: 2)
-            previewControls
+            HStack(spacing: 20) {
+                Circle().fill(model.hasStarted ? Color.green : Color.secondary).frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
+                Text(model.monitorSummary)
+                    .lineLimit(1)
+                    .help(statusDetail)
+                Spacer(minLength: 8)
+                metric("头部偏移", model.rollDeviation)
+                metric("肩线偏移", model.shoulderDeviation)
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .frame(height: 24)
         }
         .buttonStyle(.bordered)
-        .controlSize(.small)
-        .padding(.horizontal, 4)
-        .frame(height: 48)
+        .controlSize(.large)
+        .padding(.horizontal, 10)
+        .padding(.top, 6)
     }
 
-    private var monitoringControl: some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private var primaryControls: some View {
+        HStack(spacing: 8) {
             Button(action: model.toggleMonitoring) {
                 Label(model.hasStarted ? "暂停监测" : "开始监测", systemImage: model.hasStarted ? "pause.fill" : "play.fill")
+                    .frame(minWidth: 90, minHeight: 26)
             }
+            .buttonStyle(.borderedProminent)
             .help("按空格开始或暂停监测")
-            Text(model.monitorSummary)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .help(statusDetail)
+            Picker("坐姿参考", selection: $model.selectedContext) {
+                ForEach(ViewingContext.allCases) { Text($0.label).tag($0) }
+            }
+            .labelsHidden()
+            .accessibilityLabel("坐姿参考")
+            .disabled(model.calibrationProgress != nil || model.oralSamples.isRecording)
+            calibrationButton
         }
-        .frame(width: 104, alignment: .leading)
+        .fixedSize()
     }
 
     private var statusDetail: String {
@@ -69,8 +75,6 @@ struct MonitorWindowView: View {
         if !model.habitTimingSummary.isEmpty { return model.habitTimingSummary }
         return model.profile == nil ? "尚未校准" : "参考已保存"
     }
-
-    private var separator: some View { Divider().frame(height: 30) }
 
     private var calibrationButton: some View {
         Group {
@@ -89,13 +93,15 @@ struct MonitorWindowView: View {
     }
 
     private func metric(_ title: String, _ value: Double?) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
+        HStack(spacing: 6) {
+            Text(title)
             Text(value.map { String(format: "%+.1f°", $0) } ?? "—")
-                .font(.system(size: 19, weight: .medium, design: .rounded))
+                .fontWeight(.semibold)
+                .foregroundStyle(.primary)
                 .monospacedDigit()
+                .frame(minWidth: 45, alignment: .trailing)
         }
-        .frame(width: 64, alignment: .leading)
+        .fixedSize()
         .accessibilityElement(children: .combine)
     }
 
@@ -107,7 +113,7 @@ struct MonitorWindowView: View {
                 Toggle("双画面对照", isOn: $model.settings.dualPreview)
                 Toggle("显示关键点", isOn: $model.settings.showsPreviewLandmarks)
             } label: {
-                Label("画面选项", systemImage: "rectangle.on.rectangle")
+                Label("画面", systemImage: "rectangle.on.rectangle")
             }
             .menuStyle(.borderedButton)
             .help("画面选项")
@@ -117,11 +123,10 @@ struct MonitorWindowView: View {
             .disabled(!model.status.isActive || model.isDemo)
             .help("画中画")
             Button(action: desktop.showSettings) {
-                Label("坐姿设置", systemImage: "gearshape")
+                Label("设置", systemImage: "gearshape")
             }
             .help("坐姿设置")
         }
-        .labelStyle(.iconOnly)
         .fixedSize()
     }
 
@@ -171,7 +176,7 @@ private struct MonitorVideoPane: View {
                 Image(decorative: image, scale: 1)
                     .resizable().scaledToFit().scaleEffect(x: mirrored ? -1 : 1, y: 1)
             } else {
-                CameraPreview(session: model.cameraSession, mirrored: mirrored, enabled: model.renderingImageRequested)
+                CameraPreview(session: model.cameraSession, sessionQueue: model.cameraSessionQueue, mirrored: mirrored, enabled: model.renderingImageRequested)
             }
             if let observation = model.frame?.observation, observation.faceCount == 1,
                let face = observation.faceBox, !model.previewReminderMessages.isEmpty {
