@@ -26,6 +26,7 @@ done
 cp "$project_root/App/Assets/SeatedMascot.svg" "$app_path/Contents/Resources/SeatedMascot.svg"
 cp "$project_root/App/Assets/Companion.png" "$app_path/Contents/Resources/Companion.png"
 cp "$project_root/App/Assets/StatusIcon.png" "$app_path/Contents/Resources/StatusIcon.png"
+ditto "$project_root/App/Assets/Fonts" "$app_path/Contents/Resources/Fonts"
 if [[ -f "$project_root/.local/pose-backend.json" ]]; then
   cp "$project_root/.local/pose-backend.json" "$app_path/Contents/Resources/pose-backend.json"
   cp "$project_root/pose-worker/pose_worker.py" "$app_path/Contents/Resources/pose_worker.py"

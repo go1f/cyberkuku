@@ -13,3 +13,7 @@ CyberKuku uses Apple frameworks supplied by macOS, and bundles the following com
 The bundled inference runtime also contains dependencies required by these packages, including matplotlib, OpenCV, Pillow, flatbuffers, absl-py, cffi and sounddevice. Their original license files are included under `Contents/Resources/ThirdPartyLicenses/` in the release app, where available from the installed distributions.
 
 No camera images, personal calibration data, or machine-specific validation reports are included in the release.
+
+## ZCOOL KuaiLe
+
+Background reminders use [ZCOOL KuaiLe](https://github.com/googlefonts/zcool-kuaile). See the [SIL Open Font License](App/Assets/Fonts/OFL.txt).

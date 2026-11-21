@@ -61,6 +61,27 @@ import PostureCore
                 model.toggleMonitoring()
                 try await renderMonitor("paused-preview", size: CGSize(width: 720, height: 520))
                 try await renderMonitor("dark-preview", appearance: .darkAqua)
+                precondition(PreviewReminderEffect.comicFontRegistered, "Missing bundled comic font")
+                let demo = DemoFrame.packet(scenario: .headTilt, timestamp: 1)
+                if let face = demo.observation.faceBox, let image = demo.image {
+                    for mirrored in [false, true] {
+                        let review = ZStack {
+                            Color.black
+                            Image(decorative: image, scale: 1).resizable().scaledToFit()
+                                .scaleEffect(x: mirrored ? -1 : 1)
+                            PreviewReminderEffect(observation: demo.observation, face: face, mirrored: mirrored,
+                                                  messages: ["头向右扶正", "双肩放平"])
+                        }.frame(width: 880, height: 495)
+                        let renderer = ImageRenderer(content: review)
+                        guard let data = renderer.nsImage?.tiffRepresentation,
+                              let bitmap = NSBitmapImageRep(data: data),
+                              let png = bitmap.representation(using: .png, properties: [:]) else {
+                            throw CocoaError(.fileWriteUnknown)
+                        }
+                        let name = mirrored ? "reminder-type-mirrored.png" : "reminder-type.png"
+                        try png.write(to: folder.appendingPathComponent(name))
+                    }
+                }
                 desktop.showPiP(present: false)
                 let pip = desktop.presentationSnapshot
                 precondition(pip["pipIsNativeVideo"] as? Bool == true)

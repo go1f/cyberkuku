@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreText
 import PostureCore
 
 struct MonitorWindowView: View {
@@ -245,7 +246,14 @@ private struct MonitorVideoPane: View {
 }
 
 
-private struct PreviewReminderEffect: View {
+struct PreviewReminderEffect: View {
+    static let comicFontRegistered: Bool = {
+        guard let url = Bundle.main.url(forResource: "ZCOOLKuaiLe-Regular", withExtension: "ttf", subdirectory: "Fonts")
+        else { return false }
+        return CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+            || NSFont(name: "ZCOOLKuaiLe-Regular", size: 20) != nil
+    }()
+
     let observation: Observation
     let face: FaceBox
     let mirrored: Bool
@@ -264,25 +272,68 @@ private struct PreviewReminderEffect: View {
             let image = bounds(position(0, 0), position(1, 1)).insetBy(dx: 8, dy: 6)
             let protectedFace = bounds(position(face.x, face.y),
                 position(face.x + face.width, face.y + face.height)).insetBy(dx: -14, dy: -14)
-            let fontSize = min(58, max(18, image.width / 17))
-            let step = fontSize * 1.45
-            guard image.width > 2 * step, image.height > step else { return }
-            var index = 0
-            for (row, y) in stride(from: image.minY + step / 2, to: image.maxY, by: step).enumerated() {
-                var x = image.minX + CGFloat(row % 2) * fontSize * 0.65
-                while x < image.maxX {
-                    let text = context.resolve(Text(messages[index % messages.count])
-                        .font(.system(size: fontSize, weight: .black))
-                        .foregroundColor(.white.opacity(row.isMultiple(of: 2) ? 0.82 : 0.56)))
-                    let measured = text.measure(in: CGSize(width: image.width, height: step))
-                    let rect = CGRect(x: x, y: y - measured.height / 2, width: measured.width, height: measured.height)
-                    if image.contains(rect), !protectedFace.intersects(rect) {
-                        var shadow = context
-                        shadow.addFilter(.shadow(color: .black.opacity(0.85), radius: 3, y: 2))
-                        shadow.draw(text, at: rect.origin, anchor: .topLeading)
-                        index += 1
+            let face = protectedFace.intersection(image)
+            guard !face.isNull else { return }
+            let left = CGRect(x: image.minX, y: image.minY, width: face.minX - image.minX, height: image.height)
+            let right = CGRect(x: face.maxX, y: image.minY, width: image.maxX - face.maxX, height: image.height)
+            let below = CGRect(x: image.minX, y: face.maxY, width: image.width, height: image.maxY - face.maxY)
+            var occupied: [CGRect] = []
+
+            func draw(_ word: String, in region: CGRect, at fraction: CGFloat, scale: CGFloat, tilt: Double) {
+                guard region.width > 28, region.height > 28 else { return }
+                var fontSize = min(180, image.width * scale, region.height * 0.37)
+                while fontSize >= 18 {
+                    let text = context.resolve(Text(verbatim: word)
+                        .font(Self.comicFontRegistered ? .custom("ZCOOLKuaiLe-Regular", size: fontSize)
+                            : .system(size: fontSize, weight: .black, design: .rounded))
+                        .foregroundColor(.white))
+                    let measured = text.measure(in: CGSize(width: 4096, height: 1024))
+                    // Reserve room for the tilt and the outline around the lettering.
+                    let padding = measured.width * abs(sin(tilt * .pi / 180)) + 6
+                    let width = measured.width + padding
+                    let height = measured.height + padding
+                    if width <= region.width, height <= region.height {
+                        let center = CGPoint(x: region.midX,
+                            y: min(region.maxY - height / 2, max(region.minY + height / 2, region.minY + region.height * fraction)))
+                        let rect = CGRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height)
+                        if !occupied.contains(where: { $0.intersects(rect) }) {
+                            var ink = context
+                            ink.clip(to: Path(region))
+                            ink.translateBy(x: center.x, y: center.y)
+                            ink.rotate(by: .degrees(tilt))
+                            ink.addFilter(.shadow(color: .black.opacity(0.95), radius: 4, y: 3))
+                            ink.draw(text, at: .zero)
+                            occupied.append(rect)
+                            return
+                        }
                     }
-                    x += max(fontSize, measured.width) + fontSize * 0.75
+                    fontSize *= 0.86
+                }
+            }
+
+            let headDirections = ["头向左扶正": "向左", "头向右扶正": "向右"]
+            if let instruction = messages.first(where: { headDirections[$0] != nil }),
+               let direction = headDirections[instruction] {
+                // An unmirrored camera shows the user's right on the viewer's left.
+                let appearsOnRight = (direction == "向右") == mirrored
+                let directionSide = appearsOnRight ? right : left
+                let oppositeSide = appearsOnRight ? left : right
+                draw(direction, in: directionSide, at: 0.42, scale: 0.18, tilt: appearsOnRight ? -7 : 7)
+                draw("头", in: oppositeSide, at: 0.29, scale: 0.11, tilt: 8)
+                draw("扶正", in: oppositeSide, at: 0.70, scale: 0.095, tilt: -5)
+                if let secondary = messages.first(where: { $0 != instruction }) {
+                    draw(secondary, in: below, at: 0.76, scale: 0.07, tilt: 0)
+                }
+            } else if let instruction = messages.first {
+                let words = instruction == "双肩放平" ? ["双肩", "放平"] : [instruction]
+                let widerSide = left.width >= right.width ? left : right
+                let otherSide = left.width >= right.width ? right : left
+                draw(words[0], in: widerSide, at: 0.44, scale: 0.17, tilt: -6)
+                if words.count > 1 {
+                    draw(words[1], in: otherSide, at: 0.62, scale: 0.13, tilt: 6)
+                }
+                if let secondary = messages.dropFirst().first {
+                    draw(secondary, in: below, at: 0.76, scale: 0.07, tilt: 0)
                 }
             }
         }
