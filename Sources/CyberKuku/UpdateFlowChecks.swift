@@ -58,7 +58,7 @@ import PostureCore
         let operations = AppUpdateOperations(check: { item }, download: liveDownload,
             prepare: { _, _, _ in preparations += 1; return try plan() }, install: { _ in installs += 1 })
         let updater = AppUpdater(enabled: true, defaults: defaults, operations: operations)
-        updater.startCheck(manual: false)
+        updater.startCheck()
         try await wait("background check", until: { !updater.busy })
         try require(updater.available != nil && downloads == 0 && installs == 0, "Checking alone installed an update")
         var received: [Int64] = []
@@ -82,7 +82,7 @@ import PostureCore
                     "Installing state became idle or allowed cancellation")
 
         let cancelled = AppUpdater(enabled: true, defaults: defaults, operations: operations)
-        cancelled.startCheck(manual: true)
+        cancelled.startCheck()
         try await wait("check before cancellation", until: { !cancelled.busy })
         cancelled.downloadUpdate()
         try await wait("download before cancellation", until: { (cancelled.downloadProgress?.received ?? 0) > 0 })
@@ -104,7 +104,7 @@ import PostureCore
                 await Task.detached { try? await Task.sleep(nanoseconds: 250_000_000) }.value
                 return prepared
             }, install: { _ in installs += 1 }))
-        preparing.startCheck(manual: true)
+        preparing.startCheck()
         try await wait("check before verification cancellation", until: { !preparing.busy })
         preparing.downloadUpdate()
         try await wait("verification started", until: { verifyingWorkspace != nil })
@@ -116,7 +116,7 @@ import PostureCore
         let rejected = AppUpdater(enabled: true, defaults: defaults, operations: AppUpdateOperations(
             check: { item }, download: quickDownload, prepare: { _, _, _ in throw UpdateFailure.invalidArchive },
             install: { _ in installs += 1 }))
-        rejected.startCheck(manual: true)
+        rejected.startCheck()
         try await wait("check before verification rejection", until: { !rejected.busy })
         rejected.downloadUpdate()
         try await wait("verification rejection", until: { !rejected.busy })
@@ -129,7 +129,7 @@ import PostureCore
                 retryAttempts += 1
                 if retryAttempts == 1 { throw UpdateFailure.process("Injected helper launch failure") }
             }))
-        retry.startCheck(manual: true)
+        retry.startCheck()
         try await wait("check before helper failure", until: { !retry.busy })
         retry.downloadUpdate()
         try await wait("helper failure", until: { !retry.busy })

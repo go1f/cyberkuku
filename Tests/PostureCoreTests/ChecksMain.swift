@@ -146,7 +146,7 @@ struct ChecksMain {
             ("recovery animation uses evidence", reminders.testRecoverySnapshotProgressUsesRealEvidence),
             ("overlapping system interruption", sessions.overlappingInterruptions),
             ("manual pause cancels automatic resume", sessions.manualPause),
-            ("unlock clears coalesced sleep signals", sessions.unlockAndInitialPause),
+            ("unlock preserves other sleep and session blockers", sessions.unlockAndInitialPause),
             ("PiP negative-coordinate placement", sessions.placementRoundtrip),
             ("PiP changed resolution stays on screen", sessions.placementBounds),
             ("dismissed reminder survives tracking dropout", banners.trackingDropout),

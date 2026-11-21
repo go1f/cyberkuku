@@ -42,6 +42,8 @@ struct MonitorWindowView: View {
             Spacer(minLength: 2)
             previewControls
         }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
         .padding(.horizontal, 4)
         .frame(height: 48)
     }
@@ -51,7 +53,6 @@ struct MonitorWindowView: View {
             Button(action: model.toggleMonitoring) {
                 Label(model.hasStarted ? "暂停监测" : "开始监测", systemImage: model.hasStarted ? "pause.fill" : "play.fill")
             }
-            .controlSize(.small)
             .help("按空格开始或暂停监测")
             Text(model.monitorSummary)
                 .font(.caption)
@@ -83,7 +84,6 @@ struct MonitorWindowView: View {
                 }
             }
         }
-        .controlSize(.small)
         .help(model.calibrationMessage)
         .fixedSize()
     }
@@ -100,7 +100,7 @@ struct MonitorWindowView: View {
     }
 
     private var previewControls: some View {
-        ControlGroup {
+        HStack(spacing: 6) {
             Menu {
                 Toggle("镜像预览", isOn: $model.mirrored)
                     .disabled(model.settings.dualPreview)
@@ -109,6 +109,7 @@ struct MonitorWindowView: View {
             } label: {
                 Label("画面选项", systemImage: "rectangle.on.rectangle")
             }
+            .menuStyle(.borderedButton)
             .help("画面选项")
             Button(action: desktop.collapseMainToPiP) {
                 Label("画中画", systemImage: "pip.enter")

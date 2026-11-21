@@ -173,7 +173,7 @@ struct CyberKukuSettingsView: View {
             Section("应用") {
                 Button(action: host.showUpdateSettings) {
                     HStack {
-                        Label("软件更新", systemImage: "arrow.triangle.2.circlepath")
+                        Text("软件更新")
                         Spacer()
                         Image(systemName: "chevron.right").foregroundStyle(.tertiary)
                     }

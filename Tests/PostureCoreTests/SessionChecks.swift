@@ -25,8 +25,10 @@ struct SessionChecks {
         s.suspend(.screenLocked); s.unlocked(); expectFalse(s.canResume)
         _ = s.requestStart()
         s.suspend(.systemSleep); s.suspend(.sessionInactive); s.suspend(.displaySleep)
-        s.unlocked(); expectTrue(s.canResume)
-        s.resume(.displaySleep); expectTrue(s.canResume)
+        s.unlocked(); expectFalse(s.canResume)
+        s.resume(.displaySleep); expectFalse(s.canResume)
+        s.resume(.systemSleep); expectFalse(s.canResume)
+        s.resume(.sessionInactive); expectTrue(s.canResume)
     }
     func placementRoundtrip() throws {
         let area = CGRect(x: -1920, y: 120, width: 1920, height: 1080)

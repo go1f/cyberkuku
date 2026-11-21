@@ -14,9 +14,7 @@ public struct MonitoringInterruptionState: Sendable {
     public mutating func requestPause() { requestedRunning = false }
     public mutating func suspend(_ reason: MonitoringInterruption) { blockers.insert(reason) }
     public mutating func resume(_ reason: MonitoringInterruption) { blockers.remove(reason) }
-    // An explicit unlock means the current session is visible and awake. This also
-    // handles systems where the paired workspace wake notifications were coalesced.
-    public mutating func unlocked() { blockers.removeAll() }
+    public mutating func unlocked() { resume(.screenLocked) }
 }
 
 public struct FloatingWindowPlacement: Codable, Equatable, Sendable {
