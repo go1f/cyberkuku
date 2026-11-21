@@ -153,8 +153,18 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
         statusPanel.hide()
         if pipPanel == nil {
             let panel = MonitorPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: WindowLayout.pipHeight(width: 360)),
-                                     styleMask: [.titled, .closable, .resizable, .nonactivatingPanel], backing: .buffered, defer: false)
-            panel.title = "画中画"; panel.isReleasedWhenClosed = false
+                                     styleMask: [.titled, .closable, .resizable, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: false)
+            panel.title = "画中画"
+            panel.titleVisibility = .hidden
+            panel.titlebarAppearsTransparent = true
+            panel.titlebarSeparatorStyle = .none
+            panel.isOpaque = false
+            panel.backgroundColor = .clear
+            panel.hasShadow = true
+            for button: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
+                panel.standardWindowButton(button)?.isHidden = true
+            }
+            panel.isReleasedWhenClosed = false
             panel.isFloatingPanel = true; panel.hidesOnDeactivate = false; panel.becomesKeyOnlyIfNeeded = false
             panel.level = .floating
             panel.isMovableByWindowBackground = true
@@ -163,6 +173,9 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
             panel.contentMinSize = NSSize(width: 240, height: WindowLayout.pipHeight(width: 240))
             panel.contentMaxSize = NSSize(width: 800, height: WindowLayout.pipHeight(width: 800))
             let video = CameraPreviewNSView(frame: .zero)
+            video.layer?.cornerRadius = 12
+            video.layer?.cornerCurve = .continuous
+            video.layer?.masksToBounds = true
             video.onDoubleClick = { [weak self] in self?.expandPiP() }
             video.setAccessibilityLabel("摄像头视频，双击返回监测窗口")
             panel.contentView = video
@@ -312,6 +325,10 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
          "previewImageRequested": model.renderingImageRequested, "skeletonRenderingRequested": model.renderingSkeletonRequested,
          "lastFrameHasImage": model.frame?.image != nil,
          "pipContentAspectRatio": pipPanel.map { NSStringFromSize($0.contentAspectRatio) } ?? "",
+         "pipIsTitlelessAndRounded": pipPanel?.titleVisibility == .hidden
+            && pipPanel?.titlebarAppearsTransparent == true
+            && pipPanel?.standardWindowButton(.closeButton)?.isHidden == true
+            && pipVideo?.layer?.cornerRadius == 12 && pipVideo?.layer?.masksToBounds == true,
          "pipIsNativeVideo": pipPanel?.contentView === pipVideo && pipVideo != nil,
          "pipFrame": pipPanel.map { NSStringFromRect($0.frame) } ?? "",
          "pipDisplayID": pipPanel?.screen.map { router.identifier($0) } ?? ""]

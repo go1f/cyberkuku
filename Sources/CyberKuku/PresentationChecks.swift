@@ -64,6 +64,7 @@ import PostureCore
                 desktop.showPiP(present: false)
                 let pip = desktop.presentationSnapshot
                 precondition(pip["pipIsNativeVideo"] as? Bool == true)
+                precondition(pip["pipIsTitlelessAndRounded"] as? Bool == true && pip["pipOnTop"] as? Bool == true)
                 precondition(NSSizeFromString(pip["pipContentAspectRatio"] as! String) == NSSize(width: 16, height: 9))
                 precondition(pip["previewImageRequested"] as? Bool == false && pip["skeletonRenderingRequested"] as? Bool == false)
                 desktop.hidePiP()
@@ -92,7 +93,7 @@ import PostureCore
                     "mirrorMenuPresent":true, "updateMenuAbsent":true, "menuSizes":menuSizes,
                     "roundedCornersPreservedAcrossRecovery":true,
                     "onlyVerifiedEpisodeTransitionsReportRecovery":true,
-                    "nativeVideoOnlyPiP":true,
+                    "nativeVideoOnlyPiP":true, "titlelessRoundedFloatingPiP":true,
                     "renders":["dual-preview.png","single-preview.png","paused-preview.png","dark-preview.png","reminder-active.png","reminder-recovering.png","reminder-complete.png","reminder-recovered-hold.png"]]
                 let data = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted,.sortedKeys])
                 try data.write(to: folder.appendingPathComponent("checks.json"), options:.atomic)

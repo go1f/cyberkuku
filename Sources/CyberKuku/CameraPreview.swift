@@ -57,9 +57,10 @@ final class CameraPreviewNSView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override var mouseDownCanMoveWindow: Bool { onDoubleClick == nil && super.mouseDownCanMoveWindow }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { onDoubleClick != nil }
-    override func mouseUp(with event: NSEvent) {
-        if event.clickCount == 2, let onDoubleClick { onDoubleClick() }
-        else { super.mouseUp(with: event) }
+    override func mouseDown(with event: NSEvent) {
+        guard let onDoubleClick, let window else { super.mouseDown(with: event); return }
+        if event.clickCount == 2 { onDoubleClick() }
+        else { window.performDrag(with: event) }
     }
 
     override func layout() { super.layout(); preview.frame = bounds; applyPreferences() }
