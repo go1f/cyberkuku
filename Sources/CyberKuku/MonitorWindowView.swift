@@ -279,14 +279,14 @@ struct PreviewReminderEffect: View {
             let below = CGRect(x: image.minX, y: face.maxY, width: image.width, height: image.maxY - face.maxY)
             var occupied: [CGRect] = []
 
-            func draw(_ word: String, in region: CGRect, at fraction: CGFloat, scale: CGFloat, tilt: Double) {
+            func draw(_ word: String, in region: CGRect, at fraction: CGFloat, scale: CGFloat, tilt: Double, opacity: Double = 1) {
                 guard region.width > 28, region.height > 28 else { return }
                 var fontSize = min(180, image.width * scale, region.height * 0.37)
                 while fontSize >= 18 {
                     let text = context.resolve(Text(verbatim: word)
                         .font(Self.comicFontRegistered ? .custom("ZCOOLKuaiLe-Regular", size: fontSize)
                             : .system(size: fontSize, weight: .black, design: .rounded))
-                        .foregroundColor(.white))
+                        .foregroundColor(.white.opacity(opacity)))
                     let measured = text.measure(in: CGSize(width: 4096, height: 1024))
                     // Reserve room for the tilt and the outline around the lettering.
                     let padding = measured.width * abs(sin(tilt * .pi / 180)) + 6
@@ -324,6 +324,7 @@ struct PreviewReminderEffect: View {
                 if let secondary = messages.first(where: { $0 != instruction }) {
                     draw(secondary, in: below, at: 0.76, scale: 0.07, tilt: 0)
                 }
+                draw(direction, in: directionSide, at: 0.83, scale: 0.065, tilt: appearsOnRight ? 8 : -8, opacity: 0.54)
             } else if let instruction = messages.first {
                 let words = instruction == "双肩放平" ? ["双肩", "放平"] : [instruction]
                 let widerSide = left.width >= right.width ? left : right
@@ -335,6 +336,7 @@ struct PreviewReminderEffect: View {
                 if let secondary = messages.dropFirst().first {
                     draw(secondary, in: below, at: 0.76, scale: 0.07, tilt: 0)
                 }
+                draw(words.last ?? instruction, in: widerSide, at: 0.83, scale: 0.06, tilt: 8, opacity: 0.54)
             }
         }
     }
