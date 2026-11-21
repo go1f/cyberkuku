@@ -44,8 +44,7 @@ struct MonitorWindowView: View {
             .foregroundStyle(.secondary)
             .frame(height: 24)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.large)
+        .buttonStyle(MonitorToolbarButtonStyle())
         .padding(.horizontal, 10)
         .padding(.top, 6)
     }
@@ -54,14 +53,25 @@ struct MonitorWindowView: View {
         HStack(spacing: 8) {
             Button(action: model.toggleMonitoring) {
                 Label(model.hasStarted ? "暂停监测" : "开始监测", systemImage: model.hasStarted ? "pause.fill" : "play.fill")
-                    .frame(minWidth: 90, minHeight: 26)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(MonitorToolbarButtonStyle(prominent: true))
             .help("按空格开始或暂停监测")
-            Picker("坐姿参考", selection: $model.selectedContext) {
-                ForEach(ViewingContext.allCases) { Text($0.label).tag($0) }
+            Menu {
+                ForEach(ViewingContext.allCases) { context in
+                    Button {
+                        model.selectedContext = context
+                    } label: {
+                        if context == model.selectedContext {
+                            Label(context.label, systemImage: "checkmark")
+                        } else {
+                            Text(context.label)
+                        }
+                    }
+                }
+            } label: {
+                Text(model.selectedContext.label)
             }
-            .labelsHidden()
+            .modifier(MonitorToolbarMenuStyle())
             .accessibilityLabel("坐姿参考")
             .disabled(model.calibrationProgress != nil || model.oralSamples.isRecording)
             calibrationButton
@@ -115,7 +125,7 @@ struct MonitorWindowView: View {
             } label: {
                 Label("画面", systemImage: "rectangle.on.rectangle")
             }
-            .menuStyle(.borderedButton)
+            .modifier(MonitorToolbarMenuStyle())
             .help("画面选项")
             Button(action: desktop.collapseMainToPiP) {
                 Label("画中画", systemImage: "pip.enter")
@@ -162,6 +172,38 @@ struct MonitorWindowView: View {
             }
         }
         .foregroundStyle(.white.opacity(0.75))
+    }
+}
+
+private enum MonitorToolbarGeometry {
+    static let width: CGFloat = 120
+    static let height: CGFloat = 38
+    static let radius: CGFloat = 9
+}
+
+private struct MonitorToolbarButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    var prominent = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(width: MonitorToolbarGeometry.width, height: MonitorToolbarGeometry.height)
+            .foregroundStyle(prominent ? Color(nsColor: .windowBackgroundColor) : .primary)
+            .background(
+                Color.primary.opacity(prominent ? 0.88 : configuration.isPressed ? 0.14 : 0.075),
+                in: RoundedRectangle(cornerRadius: MonitorToolbarGeometry.radius)
+            )
+            .opacity(isEnabled ? 1 : 0.48)
+    }
+}
+
+private struct MonitorToolbarMenuStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .menuStyle(.borderlessButton)
+            .frame(width: MonitorToolbarGeometry.width, height: MonitorToolbarGeometry.height)
+            .background(Color.primary.opacity(0.075), in: RoundedRectangle(cornerRadius: MonitorToolbarGeometry.radius))
+            .fixedSize()
     }
 }
 
