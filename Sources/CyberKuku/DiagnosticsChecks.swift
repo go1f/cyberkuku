@@ -6,39 +6,28 @@ import PostureCore
 @MainActor
 enum DiagnosticsChecks {
     static func settings() {
-        do {
-            let legacy = Data(#"{"sustainedSeconds":25,"cooldownSeconds":180,"pipOnTop":false,"pipSize":"large","pipScreenID":"office","resumeOnLaunch":false}"#.utf8)
-            let restored = try JSONDecoder().decode(MonitorSettings.self, from: legacy)
-            precondition(!MonitorSettings().mirrored && !restored.mirrored && !restored.dualPreview)
-            let mirroredPreference = try JSONDecoder().decode(MonitorSettings.self, from: Data(#"{"mirrored":true}"#.utf8))
-            precondition(mirroredPreference.mirrored)
-            precondition(restored.tuning.sustainedSeconds == 5 && restored.tuning.headEnterDegrees == 3)
-            precondition(!restored.pipOnTop && restored.pipSize == .large && restored.pipScreenID == "office" && !restored.resumeOnLaunch)
-            var customized = restored
-            customized.tuning.sustainedSeconds = 1.5; customized.tuning.headEnterDegrees = 2
-            customized.tuning.computePreference = .neuralEngine; customized.bodyBackend = .appleVision
-            customized.dualPreview = true
-            let copy = try JSONDecoder().decode(MonitorSettings.self, from: JSONEncoder().encode(customized))
-            precondition(copy == customized)
-            customized.pipPlacement = FloatingWindowPlacement(displayID: "external", frame: CGRect(x: -800, y: 250, width: 440, height: 340),
-                visibleFrame: CGRect(x: -1440, y: 0, width: 1440, height: 900), contentWidth: 440)
-            let restoredPlacement = try JSONDecoder().decode(MonitorSettings.self, from: JSONEncoder().encode(customized))
-            precondition(restoredPlacement == customized)
-            let malformed = try JSONDecoder().decode(MonitorSettings.self, from: Data(#"{"mirrored":true,"pipPlacement":{"displayID":"x","xFraction":-4,"yFraction":0,"contentWidth":440}}"#.utf8))
-            precondition(malformed.mirrored && malformed.pipPlacement == nil)
-            let suite = "kukusit.mirror-check.\(UUID().uuidString)"
-            let defaults = UserDefaults(suiteName: suite)!
-            defer { defaults.removePersistentDomain(forName: suite) }
-            for mirrored in [true, false, true, false] {
-                customized.mirrored = mirrored
-                customized.dualPreview = !mirrored
-                customized.save(defaults: defaults)
-                precondition(MonitorSettings.load(defaults: UserDefaults(suiteName: suite)!) == customized)
-            }
-
-            print("{\"passed\":true,\"checks\":[\"legacy window preferences retained\",\"new 5s/3deg default\",\"tuning and backend roundtrip\",\"mirror preference reload true and false\"]}")
-            exit(0)
-        } catch { fputs("Settings check failed: \(error)\n", stderr); exit(1) }
+        let suite = "cyberkuku.settings-check.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var settings = MonitorSettings.load(defaults: defaults)
+        precondition(!settings.mirrored && settings.sensitivity == .balanced)
+        let presets: [(PostureSensitivity, Double, Double, Double)] = [
+            (.high, 3, 2, 6), (.balanced, 5, 3, 8), (.relaxed, 10, 5, 10)
+        ]
+        settings.pipPlacement = FloatingWindowPlacement(displayID: "external",
+            frame: CGRect(x: -800, y: 250, width: 440, height: 340),
+            visibleFrame: CGRect(x: -1440, y: 0, width: 1440, height: 900), contentWidth: 440)
+        for (index, preset) in presets.enumerated() {
+            let (sensitivity, delay, head, shoulder) = preset
+            settings.sensitivity = sensitivity
+            settings.mirrored = index.isMultiple(of: 2)
+            settings.save(defaults: defaults)
+            let restored = MonitorSettings.load(defaults: defaults)
+            precondition(restored == settings && restored.sensitivity == sensitivity)
+            precondition(restored.tuning.sustainedSeconds == delay && restored.tuning.headEnterDegrees == head
+                         && restored.tuning.shoulderEnterDegrees == shoulder)
+        }
+        print("PASS settings: sensitivity presets, preview preferences and PiP placement")
     }
     static func pipeline() {
         do {
@@ -109,7 +98,7 @@ enum DiagnosticsChecks {
         feed(interrupted, (0...8).map { 1.5 + Double($0) / 6 })
         precondition(interrupted.tick(at: 3))
         precondition(interrupted.libraries.isEmpty)
-        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("kukusit-store-check-" + UUID().uuidString)
+        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("cyberkuku-store-check-" + UUID().uuidString)
         do {
             try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: temporary) }

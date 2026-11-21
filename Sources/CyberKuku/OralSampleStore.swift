@@ -32,7 +32,7 @@ final class OralSampleStore: ObservableObject {
         guard persistent else { return }
         do {
             let root = try archiveURL?.deletingLastPathComponent() ?? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
-                appropriateFor: nil, create: true).appendingPathComponent("PostureDiagnostics", isDirectory: true)
+                appropriateFor: nil, create: true).appendingPathComponent("CyberKuku", isDirectory: true)
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
             url = archiveURL ?? root.appendingPathComponent("oral-examples-v1.json")

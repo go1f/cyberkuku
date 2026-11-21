@@ -10,6 +10,6 @@ ln -s /Applications "$staging/Applications"
 printf '%s\n' '将 CyberKuku.app 拖到 Applications 文件夹，然后从“应用程序”或 Spotlight 启动。' \
   '首次开始监测需允许摄像头。图像在本机处理，不上传、不保存照片或录像。' \
   '本版是本地开发证书自签名，未进行 Apple 公证；按 macOS 的隐私与安全性提示手动允许。' > "$staging/安装说明.txt"
-archive="release/Kukusit-${version}-macOS-arm64.dmg"
+archive="release/CyberKuku-${version}-macOS-arm64.dmg"
 hdiutil create -volname CyberKuku -srcfolder "$staging" -format UDZO -ov "$archive"
 (cd release && shasum -a 256 "$(basename "$archive")") > "$archive.sha256"

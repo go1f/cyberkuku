@@ -16,10 +16,12 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
         controller.onPetVisibilityChanged = { [weak self] in self?.statusPanel.updateGeometry() }
         return controller
     }()
+    @Published var showingOralSamples = false
     @Published private(set) var pipVisible = false
     private var mainVisible = false
     private var mainWindow: NSWindow?
-    private var settingsWindow: NSWindow?
+    private let standaloneSettings = SettingsWindowController()
+    var openPostureSettings: (() -> Void)?
     private var pipPanel: MonitorPanel?
     private var placingPiP = false
     private var lastPlacedFrame: NSRect?
@@ -124,16 +126,13 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
     @objc func openMain() { showMain(expandPreview: true) }
     @objc func showSettings() {
         statusPanel.hide()
-        if settingsWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 720),
-                styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
-            window.title = "坐姿设置"; window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: SettingsWindowView(model: model, desktop: self, router: router))
-            window.center(); settingsWindow = window
+        if let openPostureSettings {
+            openPostureSettings()
+        } else {
+            standaloneSettings.show(PostureSettingsForm(model: model, desktop: self))
         }
-        NSApplication.shared.activate(ignoringOtherApps: true)
-        settingsWindow?.makeKeyAndOrderFront(nil)
     }
+
     func showMain(expandPreview: Bool) {
         statusPanel.hide()
         if mainWindow == nil {
@@ -275,7 +274,7 @@ final class DesktopCoordinator: NSObject, ObservableObject, NSWindowDelegate {
         model.onWindowClosed = nil
         subscriptions.removeAll()
         statusPanel.hide()
-        mainWindow?.close(); settingsWindow?.close(); pipPanel?.close()
+        mainWindow?.close(); standaloneSettings.close(); pipPanel?.close()
         if sharedOutput == nil { reminders.shutdown() }
         else { sharedOutput?.close() }
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }

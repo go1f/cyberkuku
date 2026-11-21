@@ -114,7 +114,7 @@ import PostureCore
         }
         do {
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .unspecified) else {
-                throw NSError(domain:"KukusitDualPreview",code:1,userInfo:[NSLocalizedDescriptionKey:"Built-in camera unavailable"])
+                throw NSError(domain:"CyberKukuDualPreview",code:1,userInfo:[NSLocalizedDescriptionKey:"Built-in camera unavailable"])
             }
             let session = AVCaptureSession(); session.beginConfiguration(); session.sessionPreset = .high
             let input = try AVCaptureDeviceInput(device: device)
@@ -124,7 +124,7 @@ import PostureCore
             session.commitConfiguration(); session.startRunning()
             defer { session.stopRunning(); original.session = nil; mirrored.session = nil }
             guard let a = original.connection, let b = mirrored.connection else {
-                throw NSError(domain:"KukusitDualPreview",code:2,userInfo:[NSLocalizedDescriptionKey:"Two preview connections were not created"])
+                throw NSError(domain:"CyberKukuDualPreview",code:2,userInfo:[NSLocalizedDescriptionKey:"Two preview connections were not created"])
             }
             precondition(a !== b && a.isVideoMirroringSupported && b.isVideoMirroringSupported)
             a.automaticallyAdjustsVideoMirroring = false; a.isVideoMirrored = false

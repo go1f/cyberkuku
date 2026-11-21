@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import SwiftUI
 
 enum CompanionSkin: String, CaseIterable {
     case cat, boat
@@ -70,13 +71,18 @@ final class PosturePlugin {
 }
 
 @MainActor
-final class CompanionHost: NSObject {
+final class CompanionHost: NSObject, ObservableObject {
+    enum SettingsPage: Hashable { case companion, posture }
+    @Published var settingsPage: SettingsPage = .companion
+    private let settings = SettingsWindowController()
+    var settingsWindow: NSWindow? { settings.window }
     let output: ReminderPanelController
     let bubbles: BubbleHub
     let appearance: AppearancePlugin
     let posture: PosturePlugin
     let updater: AppUpdater
     private let defaults: UserDefaults
+    private let presentsOnScreen: Bool
     private var statusItem: NSStatusItem?
     let statusMenu = NSMenu()
     private let shapeMenu = NSMenu(title: "切换形象")
@@ -84,6 +90,7 @@ final class CompanionHost: NSObject {
 
     init(defaults: UserDefaults = .standard, presentsOnScreen: Bool = true) {
         self.defaults = defaults
+        self.presentsOnScreen = presentsOnScreen
         let output = ReminderPanelController(router: DisplayRouter(), presentsOnScreen: presentsOnScreen, hosted: true)
         self.output = output
         bubbles = BubbleHub(renderer: output)
@@ -94,7 +101,7 @@ final class CompanionHost: NSObject {
         super.init()
         output.onOpenMonitor = { [weak self] in self?.posture.desktop?.openMain() }
         appearance.activate()
-        if defaults.bool(forKey: "plugins.posture") { posture.activate() }
+        if defaults.bool(forKey: "plugins.posture") { activatePosture() }
         rebuildStatusMenu()
         if presentsOnScreen {
             if let model = posture.desktop?.model, model.settings.resumeOnLaunch, !model.profiles.isEmpty,
@@ -112,11 +119,23 @@ final class CompanionHost: NSObject {
         }
     }
 
-    @objc func togglePosture() {
-        let enable = posture.desktop == nil
-        if enable { posture.activate() } else { posture.deactivate() }
-        defaults.set(enable, forKey: "plugins.posture")
+    private func activatePosture() {
+        posture.activate()
+        posture.desktop?.openPostureSettings = { [weak self] in self?.showPostureSettings() }
+    }
+
+    func setPostureEnabled(_ enabled: Bool) {
+        guard enabled != (posture.desktop != nil) else { return }
+        objectWillChange.send()
+        if enabled { activatePosture() } else { posture.deactivate() }
+        defaults.set(enabled, forKey: "plugins.posture")
         rebuildStatusMenu()
+    }
+
+    @objc func showSettings() { settings.show(CyberKukuSettingsView(host: self), activate: presentsOnScreen) }
+    @objc func showPostureSettings() {
+        settingsPage = .posture
+        showSettings()
     }
 
     @objc private func selectSkin(_ item: NSMenuItem) {
@@ -124,6 +143,7 @@ final class CompanionHost: NSObject {
         adopt(skin)
     }
     func adopt(_ skin: CompanionSkin) {
+        objectWillChange.send()
         appearance.skin = skin
         for item in shapeMenu.items {
             item.state = item.representedObject as? String == skin.rawValue ? .on : .off
@@ -150,19 +170,14 @@ final class CompanionHost: NSObject {
         shapes.submenu = shapeMenu
         statusMenu.addItem(shapes)
         if let desktop = posture.desktop {
-            let menu = desktop.pluginMenu
-            if !menu.items.contains(where: { $0.action == #selector(togglePosture) }) {
-                menu.addItem(.separator())
-                let disable = addItem(menu, "停用注意坐姿", #selector(togglePosture), self)
-                disable.isEnabled = true
-            }
             let row = NSMenuItem(title: posture.title, action: nil, keyEquivalent: "")
-            row.submenu = menu
+            row.submenu = desktop.pluginMenu
             statusMenu.addItem(row)
         } else {
-            addItem(statusMenu, "启用注意坐姿", #selector(togglePosture), self)
+            addItem(statusMenu, "设置注意坐姿…", #selector(showPostureSettings), self)
         }
         statusMenu.addItem(.separator())
+        addItem(statusMenu, "设置…", #selector(showSettings), self)
         addItem(statusMenu, "应用更新…", #selector(AppUpdater.showWindow(_:)), updater)
         addItem(statusMenu, "退出 CyberKuku", #selector(NSApplication.terminate(_:)), NSApp)
     }
@@ -170,6 +185,7 @@ final class CompanionHost: NSObject {
     private func installApplicationMenu() {
         let root = NSMenu(), file = NSMenu(title: "文件")
         let appItem = NSMenuItem(); appItem.submenu = appMenu; root.addItem(appItem)
+        addItem(appMenu, "设置…", #selector(showSettings), self, key: ",")
         addItem(appMenu, "应用更新…", #selector(AppUpdater.showWindow(_:)), updater)
         appMenu.addItem(.separator())
         addItem(appMenu, "退出 CyberKuku", #selector(NSApplication.terminate(_:)), NSApp, key: "q")
@@ -185,6 +201,7 @@ final class CompanionHost: NSObject {
         NSApp.mainMenu = root
     }
     func shutdown() {
+        settings.close()
         posture.deactivate()
         appearance.deactivate()
         output.shutdown()

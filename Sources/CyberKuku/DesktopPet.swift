@@ -1068,7 +1068,7 @@ extension DesktopPetChecks {
 
 extension DesktopPetController {
     @MainActor static func interactionChecks() -> [String] {
-        let suite = "KukuSeat.Edge.Check.\(UUID())"
+        let suite = "CyberKuku.Edge.Check.\(UUID())"
         let prefs = UserDefaults(suiteName:suite)!
         defer { prefs.removePersistentDomain(forName:suite) }
         let controller = DesktopPetController(defaults:prefs,presentsOnScreen:false,coveredDisplays:{ [] })
@@ -1107,7 +1107,7 @@ extension DesktopPetController {
 
 extension DesktopPetController {
     @MainActor static func visibilityChecks() -> [String] {
-        let suite = "KukuSeat.Visibility.Check.\(UUID())"
+        let suite = "CyberKuku.Visibility.Check.\(UUID())"
         let prefs = UserDefaults(suiteName:suite)!
         defer { prefs.removePersistentDomain(forName:suite) }
         prefs.set(true,forKey:"desktopPet.hidden")
@@ -1145,7 +1145,7 @@ extension DesktopPetController {
 
 extension DesktopPetController {
     @MainActor static func hoverAndDragChecks() -> [String] {
-        let suite = "KukuSeat.Pointer.Check.\(UUID())"
+        let suite = "CyberKuku.Pointer.Check.\(UUID())"
         let prefs = UserDefaults(suiteName:suite)!
         defer { prefs.removePersistentDomain(forName:suite) }
         let c = DesktopPetController(defaults:prefs,presentsOnScreen:false,coveredDisplays:{ [] })
@@ -1200,7 +1200,7 @@ extension DesktopPetController {
 
 extension DesktopPetController {
     @MainActor static func fullScreenChecks() -> [String] {
-        let suite = "KukuSeat.FullScreen.Check.\(UUID())", prefs = UserDefaults(suiteName:suite)!
+        let suite = "CyberKuku.FullScreen.Check.\(UUID())", prefs = UserDefaults(suiteName:suite)!
         defer { prefs.removePersistentDomain(forName:suite) }
         var coverage: Set<CGDirectDisplayID> = []
         let c = DesktopPetController(defaults:prefs,presentsOnScreen:false,coveredDisplays:{ coverage })
@@ -1272,7 +1272,7 @@ extension DesktopPetController {
             guard let screen = NSScreen.screens.first(where:{ coverage.contains(PetFullscreenMonitor.displayID($0)) }) else {
                 print("{\"skipped\":true,\"reason\":\"No existing full-screen display\"}"); app.terminate(nil); return
             }
-            let suite = "KukuSeat.FullScreen.Live.\(UUID())", prefs = UserDefaults(suiteName:suite)!
+            let suite = "CyberKuku.FullScreen.Live.\(UUID())", prefs = UserDefaults(suiteName:suite)!
             let c = DesktopPetController(defaults:prefs,presentsOnScreen:true,coveredDisplays:{ coverage })
             c.enabled = true; c.placed = true
             let origin = CGPoint(x:screen.frame.midX+120,y:screen.frame.midY)

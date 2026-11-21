@@ -6,7 +6,7 @@ destination='/Applications/CyberKuku.app'
 codesign --verify --deep --strict "$source_app"
 if [[ -d "$destination" ]]; then
   mkdir -p "$project_root/.local/installed-backups"
-  mv "$destination" "$project_root/.local/installed-backups/Kukusit-$(date +%Y%m%d-%H%M%S).app"
+  mv "$destination" "$project_root/.local/installed-backups/CyberKuku-$(date +%Y%m%d-%H%M%S).app"
 fi
 ditto "$source_app" "$destination"
 codesign --verify --deep --strict "$destination"

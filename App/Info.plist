@@ -1,20 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-    <key>CFBundleIdentifier</key><string>com.kojyufu.posturediagnostics</string>
+    <key>CFBundleIdentifier</key><string>com.kojyufu.cyberkuku</string>
     <key>CFBundleName</key><string>CyberKuku</string>
     <key>CFBundleDisplayName</key><string>CyberKuku</string>
-    <key>CFBundleExecutable</key><string>PostureDiagnostics</string>
+    <key>CFBundleExecutable</key><string>CyberKuku</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleIconFile</key><string>Kukusit.icns</string>
-    <key>CFBundleShortVersionString</key><string>0.13.1</string>
-    <key>CFBundleVersion</key><string>37</string>
+    <key>CFBundleIconFile</key><string>CyberKuku.icns</string>
+    <key>CFBundleShortVersionString</key><string>1.0.0</string>
+    <key>CFBundleVersion</key><string>38</string>
     <key>LSUIElement</key><false/>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSCameraUsageDescription</key><string>仅使用 MacBook 内置摄像头，在本机分析头部、肩部、手与口唇的可见动作。图像不会上传，也不会保存照片或录像。</string>
-    <key>KukusitUpdatePublicKey</key><string>nisqWFfy5oceOQkYlvpbYCQUq+QZ8pn568HPwn3insA=</string>
-    <key>KukusitUpdateFeedURL</key><string>https://github.com/go1f/cyberkuku/releases/latest/download/update-v3.json</string>
-    <key>KukusitUpdateSigningRequirement</key><string>identifier "com.kojyufu.posturediagnostics" and certificate leaf = H"2817523E7E9887A9E9D1C50D39FA0D2ACB1C9758"</string>
+    <key>CyberKukuUpdatePublicKey</key><string>nisqWFfy5oceOQkYlvpbYCQUq+QZ8pn568HPwn3insA=</string>
+    <key>CyberKukuUpdateFeedURL</key><string>https://github.com/go1f/cyberkuku/releases/latest/download/update.json</string>
 </dict></plist>

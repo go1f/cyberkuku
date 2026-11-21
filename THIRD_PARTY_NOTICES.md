@@ -1,6 +1,6 @@
 # Third-party components
 
-Kukusit uses Apple frameworks supplied by macOS, and bundles the following components for offline pose inference:
+CyberKuku uses Apple frameworks supplied by macOS, and bundles the following components for offline pose inference:
 
 - MediaPipe 0.10.35, Google / The MediaPipe Authors, Apache License 2.0. Source: https://github.com/google-ai-edge/mediapipe
 - Pose Landmarker Full, official model bundle version 1. Model source and model card: https://developers.google.com/edge/mediapipe/solutions/vision/pose_landmarker

@@ -42,7 +42,7 @@ final class UpdateDownload: NSObject, URLSessionDownloadDelegate, @unchecked Sen
     }
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         // URLSession removes its temporary file as soon as this delegate method returns.
-        let file = FileManager.default.temporaryDirectory.appendingPathComponent("kukusit-download-\(UUID()).zip")
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("cyberkuku-download-\(UUID()).zip")
         do {
             try FileManager.default.moveItem(at: location, to: file)
             lock.lock(); savedFile = file; lock.unlock()

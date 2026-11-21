@@ -90,7 +90,7 @@ final class AppUpdater: NSObject, ObservableObject, NSMenuItemValidation {
     deinit { timer?.invalidate(); session.invalidateAndCancel() }
     static var statusURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("PostureDiagnostics/update-status.txt")
+            .appendingPathComponent("CyberKuku/update-status.txt")
     }
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         menuItem.action == #selector(showWindow(_:)) || canCheck
@@ -103,9 +103,9 @@ final class AppUpdater: NSObject, ObservableObject, NSMenuItemValidation {
         self.phase = phase; canCheck = enabled && !busy && readyPlan == nil
     }
     nonisolated private static func fetchManifest(session: URLSession) async throws -> UpdateManifest {
-        guard let urlText = Bundle.main.object(forInfoDictionaryKey: "KukusitUpdateFeedURL") as? String,
+        guard let urlText = Bundle.main.object(forInfoDictionaryKey: "CyberKukuUpdateFeedURL") as? String,
               let url = URL(string: urlText), url.scheme == "https",
-              let keyText = Bundle.main.object(forInfoDictionaryKey: "KukusitUpdatePublicKey") as? String,
+              let keyText = Bundle.main.object(forInfoDictionaryKey: "CyberKukuUpdatePublicKey") as? String,
               let key = Data(base64Encoded: keyText) else { throw UpdateFailure.invalidManifest }
         let (data, response) = try await session.data(for: URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
         try Task.checkCancellation()
@@ -215,9 +215,9 @@ final class AppUpdater: NSObject, ObservableObject, NSMenuItemValidation {
         let entries = try UpdateInstallation.command("/usr/bin/zipinfo", ["-1", file.path]).split(separator: "\n")
         guard !entries.isEmpty, entries.allSatisfy({ entry in
             let path = String(entry)
-            return (path.hasPrefix("Kukusit.app/") || path.hasPrefix("__MACOSX/")) && !path.hasPrefix("/") && !path.split(separator: "/").contains("..")
+            return (path.hasPrefix("CyberKuku.app/") || path.hasPrefix("__MACOSX/")) && !path.hasPrefix("/") && !path.split(separator: "/").contains("..")
         }) else { throw UpdateFailure.invalidArchive }
-        let workspace = destination.deletingLastPathComponent().appendingPathComponent(".kukusit-update-\(UUID().uuidString)")
+        let workspace = destination.deletingLastPathComponent().appendingPathComponent(".cyberkuku-update-\(UUID().uuidString)")
         try fm.createDirectory(at: workspace, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         var success = false; defer { if !success { try? fm.removeItem(at: workspace) } }
         let extracted = workspace.appendingPathComponent("extracted")
@@ -230,7 +230,7 @@ final class AppUpdater: NSObject, ObservableObject, NSMenuItemValidation {
                 guard url.resolvingSymlinksInPath().path.hasPrefix(root) else { throw UpdateFailure.invalidArchive }
             }
         }
-        let app = extracted.appendingPathComponent("Kukusit.app")
+        let app = extracted.appendingPathComponent("CyberKuku.app")
         try UpdateInstallation.verifyBundle(app, expectedBuild: item.build)
         try UpdateInstallation.verifyBundle(destination, expectedBuild: nil)
         let staged = workspace.appendingPathComponent("next.app")
@@ -239,7 +239,7 @@ final class AppUpdater: NSObject, ObservableObject, NSMenuItemValidation {
         return UpdateInstallPlan(destination: destination.path, staged: staged.path, workspace: workspace.path,
             parentPID: getpid(), expectedBuild: item.build,
             statusFile: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("PostureDiagnostics/update-status.txt").path)
+                .appendingPathComponent("CyberKuku/update-status.txt").path)
     }
     private func beginInstallation(_ plan: UpdateInstallPlan) throws {
         setPhase(.installing); message = phase.label
@@ -251,7 +251,7 @@ final class AppUpdater: NSObject, ObservableObject, NSMenuItemValidation {
         catch { setPhase(.idle); message = "安装未启动：\(error.localizedDescription)" }
     }
     private static func launchInstaller(_ plan: UpdateInstallPlan) throws {
-        let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/KukusitUpdateInstaller")
+        let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/CyberKukuUpdateInstaller")
         guard FileManager.default.isExecutableFile(atPath: helper.path) else {
             throw UpdateFailure.process("安装助手缺失，请重新下载应用安装包。")
         }

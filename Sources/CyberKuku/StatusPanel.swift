@@ -48,33 +48,34 @@ private final class StatusHeaderHostingView: NSHostingView<StatusMenuHeader> {
         header.view = host; menu.addItem(header); menu.addItem(.separator())
         let open = NSMenuItem(title: "打开监测窗口", action: #selector(DesktopCoordinator.openMain), keyEquivalent: "")
         open.target = desktop; menu.addItem(open)
-        pet.action = #selector(DesktopCoordinator.togglePet); pet.target = desktop; menu.addItem(pet)
-        petStatus.isEnabled = false; menu.addItem(petStatus)
+        if !desktop.embedded {
+            pet.action = #selector(DesktopCoordinator.togglePet); pet.target = desktop; menu.addItem(pet)
+            petStatus.isEnabled = false; menu.addItem(petStatus)
+        }
         pip.target = self; pip.action = #selector(togglePiP); menu.addItem(pip)
         monitor.target = self; monitor.action = #selector(toggleMonitoring); menu.addItem(monitor)
-        mirror.target = self; mirror.action = #selector(toggleMirror); menu.addItem(mirror)
-        menu.addItem(.separator())
-        let contextMenu = NSMenu(title: "校准情境"); contextMenu.autoenablesItems = false
-        for context in ViewingContext.allCases {
-            let item = NSMenuItem(title: context.label, action: #selector(selectContext(_:)), keyEquivalent: "")
-            item.target = self; item.representedObject = context.rawValue; contextMenu.addItem(item); contexts.append(item)
+        if !desktop.embedded {
+            mirror.target = self; mirror.action = #selector(toggleMirror); menu.addItem(mirror)
+            menu.addItem(.separator())
+            let contextMenu = NSMenu(title: "校准情境"); contextMenu.autoenablesItems = false
+            for context in ViewingContext.allCases {
+                let item = NSMenuItem(title: context.label, action: #selector(selectContext(_:)), keyEquivalent: "")
+                item.target = self; item.representedObject = context.rawValue; contextMenu.addItem(item); contexts.append(item)
+            }
+            let context = NSMenuItem(title: "校准情境", action: nil, keyEquivalent: "")
+            context.submenu = contextMenu; menu.addItem(context)
+            calibrate.target = self; calibrate.action = #selector(toggleCalibration); menu.addItem(calibrate)
         }
-        let context = NSMenuItem(title: "校准情境", action: nil, keyEquivalent: "")
-        context.submenu = contextMenu; menu.addItem(context)
-        calibrate.target = self; calibrate.action = #selector(toggleCalibration); menu.addItem(calibrate)
         menu.addItem(.separator())
-        let settings = NSMenuItem(title: "设置…", action: #selector(DesktopCoordinator.showSettings), keyEquivalent: "")
+        let settings = NSMenuItem(title: "坐姿设置…", action: #selector(DesktopCoordinator.showSettings), keyEquivalent: "")
         settings.target = desktop; menu.addItem(settings)
-        let quit = NSMenuItem(title: "退出 CyberKuku", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
-        quit.target = NSApplication.shared; menu.addItem(quit)
+        if !desktop.embedded {
+            let quit = NSMenuItem(title: "退出 CyberKuku", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+            quit.target = NSApplication.shared; menu.addItem(quit)
+        }
         updateGeometry()
     }
-    var pluginMenu: NSMenu {
-        for item in menu.items where item === pet || item === petStatus || item.action == #selector(NSApplication.terminate(_:)) {
-            menu.removeItem(item)
-        }
-        return menu
-    }
+    var pluginMenu: NSMenu { menu }
     func attach(to item: NSStatusItem) {
         statusItem = item
         // Native status-menu presentation supplies system glass, anchoring and keyboard tracking.

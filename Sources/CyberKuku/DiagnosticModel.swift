@@ -17,7 +17,7 @@ final class DiagnosticModel: ObservableObject {
     }
     @Published var profiles: [String: Calibration] = [:]
     @Published var calibrationProgress: Double?
-    @Published var calibrationMessage = "看上方外接屏，保持你选定的舒适参考姿态约 20 秒。"
+    @Published var calibrationMessage = "看向选定的屏幕，保持舒适坐姿约 20 秒。"
     @Published var notice: String?
     @Published var frameCount = 0
     @Published var faceValidCount = 0
@@ -115,7 +115,7 @@ final class DiagnosticModel: ObservableObject {
         oralSamples = OralSampleStore(persistent: !demo && !CommandLine.arguments.contains("--camera-check") && !CommandLine.arguments.contains("--session-resume-check"))
         do {
             let root = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
-                                                  appropriateFor: nil, create: true).appendingPathComponent("PostureDiagnostics", isDirectory: true)
+                                                  appropriateFor: nil, create: true).appendingPathComponent("CyberKuku", isDirectory: true)
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
             archiveURL = root.appendingPathComponent("calibration-v1.json")
@@ -333,10 +333,6 @@ final class DiagnosticModel: ObservableObject {
         resumeWork = work
         DispatchQueue.main.asyncAfter(deadline: .now()+0.8, execute: work)
     }
-    func backendDidChange() {
-        settings.bodyBackend = bodyBackend
-        if !isDemo { pause(reason: "肩部模型已切换，请重新开始观察；不同模型的参考会分别校验。") }
-    }
     func attachWindow(_ window: NSWindow) {
         guard diagnosticWindow !== window else { return }
         if let windowCloseObserver { NotificationCenter.default.removeObserver(windowCloseObserver) }
@@ -513,38 +509,6 @@ final class DiagnosticModel: ObservableObject {
         camera.configureAnalysis(tuning: tuning, hands: settings.handMouthMonitoring,
             oral: settings.experimentalLipMonitoring || settings.experimentalFaceMonitoring || settings.mouthShiftMonitoring
                 || settings.oralPoseMonitoring || oralSamples.isRecording || collector != nil)
-    }
-    func applySensitivityPreset(_ preset: Int) {
-        var tuning = settings.tuning
-        switch preset {
-        case 0: tuning.sustainedSeconds = 3; tuning.headEnterDegrees = 2; tuning.headExitDegrees = 1
-        case 2: tuning.sustainedSeconds = 10; tuning.headEnterDegrees = 5; tuning.headExitDegrees = 2.5
-        default: tuning.sustainedSeconds = 5; tuning.headEnterDegrees = 3; tuning.headExitDegrees = 1.5
-        }
-        settings.tuning = tuning.normalized
-    }
-    func restoreTuningDefaults() { settings.tuning = MonitorTuning() }
-    func exportTuning() {
-        let panel = NSSavePanel(); panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "kukusit-parameters.json"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try encoder.encode(settings.tuning.normalized).write(to: url, options: .atomic)
-            notice = "参数已导出；文件不包含个人参考、图像或监测记录。"
-        } catch { notice = "参数导出失败：\(error.localizedDescription)" }
-    }
-    func importTuning() {
-        let panel = NSOpenPanel(); panel.allowedContentTypes = [.json]; panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            let handle = try FileHandle(forReadingFrom: url)
-            defer { try? handle.close() }
-            let data = try handle.read(upToCount: 64 * 1024 + 1) ?? Data()
-            guard data.count <= 64 * 1024 else { notice = "参数文件过大。"; return }
-            settings.tuning = try JSONDecoder().decode(MonitorTuning.self, from: data).normalized
-            notice = "参数已导入并生效。"
-        } catch { notice = "参数文件无法读取：\(error.localizedDescription)" }
     }
     private func applyReminderResult(_ result: ReminderResult) {
         pendingRecoveredIDs.formUnion(BubbleSnapshot.recoveredPostureIDs(previous: postureChannels, current: result.channels))

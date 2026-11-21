@@ -29,10 +29,10 @@ import PostureCore
     }
     private static func scenarios(server: URL) async throws -> [String: Any] {
         let fm = FileManager.default
-        let root = fm.temporaryDirectory.appendingPathComponent("kukusit-flow-\(UUID())")
+        let root = fm.temporaryDirectory.appendingPathComponent("cyberkuku-flow-\(UUID())")
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: root) }
-        let suite = "kukusit-update-flow-\(UUID())"
+        let suite = "cyberkuku-update-flow-\(UUID())"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.set(false, forKey: "nativeUpdateAutomatic")
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -44,10 +44,10 @@ import PostureCore
         var downloads = 0, preparations = 0, installs = 0
         var preparedWorkspaces: [URL] = []
         func plan() throws -> UpdateInstallPlan {
-            let workspace = root.appendingPathComponent(".kukusit-update-\(UUID())")
+            let workspace = root.appendingPathComponent(".cyberkuku-update-\(UUID())")
             try fm.createDirectory(at: workspace, withIntermediateDirectories: true)
             preparedWorkspaces.append(workspace)
-            return UpdateInstallPlan(destination: root.appendingPathComponent("Kukusit.app").path,
+            return UpdateInstallPlan(destination: root.appendingPathComponent("CyberKuku.app").path,
                 staged: workspace.appendingPathComponent("next.app").path, workspace: workspace.path,
                 parentPID: 1, expectedBuild: item.build, statusFile: root.appendingPathComponent("status").path)
         }

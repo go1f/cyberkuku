@@ -148,7 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-enum PostureDiagnosticsApp {
+enum CyberKukuApp {
     @MainActor static func main() {
         if CommandLine.arguments.contains("--companion-host-check") { CompanionHostChecks.run(); return }
         if CommandLine.arguments.contains("--fullscreen-edge-live-check") { DesktopPetController.liveFullScreenEdgeCheck(); return }
@@ -173,7 +173,7 @@ enum PostureDiagnosticsApp {
         }
         if CommandLine.arguments.contains("--session-resume-check") { SessionResumeChecks.run(); return }
         if CommandLine.arguments.contains("--bridge-check") { BridgeChecks.run() }
-        if CommandLine.arguments.contains("--settings-check") { DiagnosticsChecks.settings() }
+        if CommandLine.arguments.contains("--settings-check") { DiagnosticsChecks.settings(); return }
         if CommandLine.arguments.contains("--pipeline-check") { DiagnosticsChecks.pipeline() }
         if CommandLine.arguments.contains("--oral-store-check") { DiagnosticsChecks.oralStore() }
         if let index = CommandLine.arguments.firstIndex(of: "--image-check") {

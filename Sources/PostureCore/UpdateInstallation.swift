@@ -14,8 +14,8 @@ public struct UpdateInstallPlan: Codable {
     }
 }
 public enum UpdateInstallation {
-    public static let bundleID = "com.kojyufu.posturediagnostics"
-    public static let requirement = "identifier \"com.kojyufu.posturediagnostics\" and certificate leaf = H\"2817523E7E9887A9E9D1C50D39FA0D2ACB1C9758\""
+    public static let bundleID = "com.kojyufu.cyberkuku"
+    public static let requirement = "identifier \"com.kojyufu.cyberkuku\" and certificate leaf = H\"2817523E7E9887A9E9D1C50D39FA0D2ACB1C9758\""
 
     /// The helper never elevates privileges. Both renames stay on the destination volume.
     /// A failed validation or relaunch restores the previous bundle.
@@ -29,12 +29,12 @@ public enum UpdateInstallation {
         let staged = URL(fileURLWithPath: plan.staged).standardizedFileURL
         guard destination.pathExtension == "app", destination.resolvingSymlinksInPath() == destination,
               workspace.deletingLastPathComponent() == destination.deletingLastPathComponent(),
-              workspace.lastPathComponent.hasPrefix(".kukusit-update-"),
+              workspace.lastPathComponent.hasPrefix(".cyberkuku-update-"),
               workspace.resolvingSymlinksInPath() == workspace,
               staged == workspace.appendingPathComponent("next.app"),
               staged.resolvingSymlinksInPath() == staged,
               plan.expectedBuild > 0 else { throw UpdateFailure.installLocation }
-        let lock = destination.deletingLastPathComponent().appendingPathComponent(".kukusit-update-lock")
+        let lock = destination.deletingLastPathComponent().appendingPathComponent(".cyberkuku-update-lock")
         guard mkdir(lock.path, 0o700) == 0 else { throw UpdateFailure.busy }
         defer { try? fm.removeItem(at: lock) }
         try verify(destination, nil)

@@ -9,8 +9,8 @@ final class AppAppearance {
 
     func start() {
         guard observation == nil else { return }
-        lightImage = icon(named: "KukusitLight")
-        darkImage = icon(named: "KukusitDark")
+        lightImage = icon(named: "CyberKukuLight")
+        darkImage = icon(named: "CyberKukuDark")
         observation = NSApplication.shared.observe(\.effectiveAppearance, options: [.initial, .new]) { [weak self] _, _ in
             Task { @MainActor [weak self] in self?.updateIcon() }
         }

@@ -5,7 +5,7 @@ from pathlib import Path
 root=Path(__file__).resolve().parent.parent
 info=plistlib.loads((root/'App/Info.plist').read_bytes())
 version=info['CFBundleShortVersionString']
-archive=root/f'release/Kukusit-{version}-macOS-arm64.zip'
+archive=root/f'release/CyberKuku-{version}-macOS-arm64.zip'
 work=root/'.local/native-update'
 work.mkdir(parents=True,exist_ok=True)
 digest=hashlib.sha256()
@@ -22,14 +22,11 @@ manifest=dict(schema=1,version=version,build=int(info['CFBundleVersion']),minimu
 tool=root/'.local/sparkle/bin/sign_update'
 if not tool.exists():
     raise SystemExit('Install the maintainer signing tool first; see docs/updating.md.')
-# Old clients validate the literal former repository path before following GitHub's redirect.
-# Keep that feed for skipped upgrades; new clients use the canonical repository directly.
-for filename, repository in [('update.json', 'kukusit'), ('update-v2.json', 'kukuseat'), ('update-v3.json', 'cyberkuku')]:
-    manifest['url']=f'https://github.com/go1f/{repository}/releases/download/v{version}/{archive.name}'
-    payload=work/f'{filename}-payload.json'
-    payload.write_bytes(json.dumps(manifest,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode())
-    signature=subprocess.check_output([str(tool),'-p','--disable-signing-warning',str(payload)],text=True).strip()
-    assert len(base64.b64decode(signature,validate=True)) == 64
-    output=root/'release'/filename
-    output.write_text(json.dumps(dict(payload=base64.b64encode(payload.read_bytes()).decode(),signature=signature),separators=(',',':'))+'\n')
-    print(f'Signed manifest: {output}')
+manifest["url"] = f"https://github.com/go1f/cyberkuku/releases/download/v{version}/{archive.name}"
+payload = work / "update-payload.json"
+payload.write_bytes(json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode())
+signature = subprocess.check_output([str(tool), "-p", "--disable-signing-warning", str(payload)], text=True).strip()
+assert len(base64.b64decode(signature, validate=True)) == 64
+output = root / "release" / "update.json"
+output.write_text(json.dumps(dict(payload=base64.b64encode(payload.read_bytes()).decode(), signature=signature), separators=(",", ":")) + "\n")
+print(f"Signed manifest: {output}")

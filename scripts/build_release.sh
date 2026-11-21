@@ -10,7 +10,7 @@ if [[ ! -x .local/frozen/pose-worker/pose-worker || ! -f .local/frozen/source.sh
   zsh scripts/build_pose_runtime.sh
 fi
 # Sign only the completed portable bundle with the developer identity.
-KUKUSIT_SIGN_IDENTITY=- zsh scripts/build_app.sh
+CYBERKUKU_SIGN_IDENTITY=- zsh scripts/build_app.sh
 release_app="$project_root/release/CyberKuku.app"
 mkdir -p release
 if [[ -d "$release_app" ]]; then mv "$release_app" "$project_root/.local/previous-release-app-$(date +%s)"; fi
@@ -30,12 +30,9 @@ mkdir -p "$release_app/Contents/Resources/ThirdPartyLicenses/Python"
 cp App/Python-LICENSE.txt "$release_app/Contents/Resources/ThirdPartyLicenses/Python/LICENSE.txt"
 .venv-pose/bin/python scripts/collect_licenses.py "$release_app/Contents/Resources/ThirdPartyLicenses"
 zsh scripts/sign_app.sh "$release_app"
-"$release_app/Contents/MacOS/PostureDiagnostics" --bridge-check
+"$release_app/Contents/MacOS/CyberKuku" --bridge-check
 version="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' App/Info.plist)"
-archive="release/Kukusit-${version}-macOS-arm64.zip"
-compatibility_stage="$(mktemp -d "$project_root/.local/update-stage.XXXXXX")"
-trap 'rm -rf "$compatibility_stage"' EXIT
-ditto "$release_app" "$compatibility_stage/Kukusit.app"
-ditto -c -k --sequesterRsrc --keepParent "$compatibility_stage/Kukusit.app" "$archive"
+archive="release/CyberKuku-${version}-macOS-arm64.zip"
+ditto -c -k --sequesterRsrc --keepParent "$release_app" "$archive"
 (cd release && shasum -a 256 "$(basename "$archive")") > "${archive}.sha256"
 printf 'Portable app: %s\nArchive: %s\n' "$release_app" "$archive"

@@ -9,7 +9,7 @@ import SwiftUI
         renderer.scale = 2
         guard let data = renderer.nsImage?.tiffRepresentation,
               let image = NSBitmapImageRep(data: data), let png = image.representation(using: .png, properties: [:]) else {
-            throw NSError(domain: "KukusitViewRender", code: 1, userInfo: [NSLocalizedDescriptionKey: "Native view render unavailable"])
+            throw NSError(domain: "CyberKukuViewRender", code: 1, userInfo: [NSLocalizedDescriptionKey: "Native view render unavailable"])
         }
         try png.write(to: url, options: .atomic)
     }

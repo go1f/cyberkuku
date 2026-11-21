@@ -9,4 +9,4 @@ docs/validation/
 *.spec
 release/
 
-.build-kukuseat/
+.build-*/
