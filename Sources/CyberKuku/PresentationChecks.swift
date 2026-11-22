@@ -62,6 +62,11 @@ import PostureCore
                 try await renderMonitor("paused-preview", size: CGSize(width: 720, height: 520))
                 try await renderMonitor("dark-preview", appearance: .darkAqua)
                 precondition(PreviewReminderEffect.comicFontRegistered, "Missing bundled comic font")
+                precondition(PreviewReminderEffect.actionWords(for: "双肩放平", layoutSeed: 0) == ["高", "低", "不平！"])
+                precondition(PreviewReminderEffect.actionWords(for: "放松下颌", layoutSeed: 0) == ["张嘴"])
+                precondition(PreviewReminderEffect.actionWords(for: "放松下颌", layoutSeed: 1) == ["唔好", "咬", "啦！"])
+                precondition(PreviewReminderEffect.actionWords(for: "放松舌头", layoutSeed: 0) == ["吐舌"])
+                precondition(PreviewReminderEffect.actionWords(for: "放松嘴角", layoutSeed: 0) == ["露齿", "笑"])
                 let demo = DemoFrame.packet(scenario: .headTilt, timestamp: 1)
                 if let face = demo.observation.faceBox, let image = demo.image {
                     var firstLayout: Data?

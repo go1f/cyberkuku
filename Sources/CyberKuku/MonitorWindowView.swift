@@ -254,6 +254,26 @@ struct PreviewReminderEffect: View {
             || NSFont(name: "ZCOOLKuaiLe-Regular", size: 20) != nil
     }()
 
+    static func actionWords(for message: String, layoutSeed: UInt64) -> [String] {
+        switch message {
+        case "双肩放平": return ["高", "低", "不平！"]
+        case "放松下颌": return layoutSeed.isMultiple(of: 2) ? ["张嘴"] : ["唔好", "咬", "啦！"]
+        case "放松舌头": return ["吐舌"]
+        case "放松嘴唇", "放松嘴角": return ["露齿", "笑"]
+        case "手离开嘴唇": return ["手", "离开", "嘴唇"]
+        case "放松双眼": return ["放松", "双眼"]
+        default: return [message]
+        }
+    }
+
+    private static let soundEffects = ["咻——", "啵", "噔！", "嘘……"]
+    private static let asides = ["慢慢嚟", "差一啲啲", "就咁", "好喇"]
+    private static let easterEggs = [
+        ["立正！"], ["唔准", "抽水"], ["我眼睛", "想旅行"],
+        ["小费", "可以多给一点吗"],
+        ["双掌平推", "双腿下垂", "唔准抽水", "涡轮增压"]
+    ]
+
     let observation: Observation
     let face: FaceBox
     let mirrored: Bool
@@ -293,7 +313,7 @@ struct PreviewReminderEffect: View {
                 let tilt = baseTilt + Double(nextFraction() - 0.5) * 12
                 guard region.width > 28, region.height > 28 else { return }
                 var fontSize = min(180, image.width * scale, region.height * 0.37)
-                while fontSize >= 18 {
+                while fontSize >= (opacity < 0.5 ? 11 : 18) {
                     let text = context.resolve(Text(verbatim: word)
                         .font(Self.comicFontRegistered ? .custom("ZCOOLKuaiLe-Regular", size: fontSize)
                             : .system(size: fontSize, weight: .black, design: .rounded))
@@ -322,32 +342,71 @@ struct PreviewReminderEffect: View {
                 }
             }
 
+            var seen: Set<String> = []
+            let messages = self.messages.filter { seen.insert($0).inserted }
+            let secondaryY = max(below.minY, image.minY + image.height * 0.75)
+            let secondaryBand = CGRect(x: below.minX, y: secondaryY,
+                                       width: below.width, height: below.maxY - secondaryY)
+            func actionArea(_ side: CGRect) -> CGRect {
+                guard messages.count > 1, secondaryBand.height >= 60 else { return side }
+                return CGRect(x: side.minX, y: side.minY, width: side.width, height: secondaryY - side.minY)
+            }
+            let widerSide = actionArea(left.width >= right.width ? left : right)
+            let otherSide = actionArea(left.width >= right.width ? right : left)
+
+            func drawSecondary(_ message: String) {
+                let words = Self.actionWords(for: message, layoutSeed: layoutSeed)
+                let width = secondaryBand.width / CGFloat(words.count)
+                for (index, word) in words.enumerated() {
+                    let slot = CGRect(x: secondaryBand.minX + CGFloat(index) * width, y: secondaryBand.minY,
+                                      width: width, height: secondaryBand.height)
+                    draw(word, in: slot, at: 0.55, scale: 0.085, tilt: 0)
+                }
+            }
+
             let headDirections = ["头向左扶正": "向左", "头向右扶正": "向右"]
             if let instruction = messages.first(where: { headDirections[$0] != nil }),
                let direction = headDirections[instruction] {
                 // An unmirrored camera shows the user's right on the viewer's left.
                 let appearsOnRight = (direction == "向右") == mirrored
-                let directionSide = appearsOnRight ? right : left
-                let oppositeSide = appearsOnRight ? left : right
+                let directionSide = actionArea(appearsOnRight ? right : left)
+                let oppositeSide = actionArea(appearsOnRight ? left : right)
                 draw(direction, in: directionSide, at: 0.42, scale: 0.18, tilt: appearsOnRight ? -7 : 7)
                 draw("头", in: oppositeSide, at: 0.29, scale: 0.11, tilt: 8)
                 draw("扶正", in: oppositeSide, at: 0.70, scale: 0.095, tilt: -5)
                 if let secondary = messages.first(where: { $0 != instruction }) {
-                    draw(secondary, in: below, at: 0.76, scale: 0.07, tilt: 0)
+                    drawSecondary(secondary)
                 }
                 draw(direction, in: directionSide, at: 0.83, scale: 0.065, tilt: appearsOnRight ? 8 : -8, opacity: 0.54)
             } else if let instruction = messages.first {
-                let words = instruction == "双肩放平" ? ["双肩", "放平"] : [instruction]
-                let widerSide = left.width >= right.width ? left : right
-                let otherSide = left.width >= right.width ? right : left
-                draw(words[0], in: widerSide, at: 0.44, scale: 0.17, tilt: -6)
-                if words.count > 1 {
-                    draw(words[1], in: otherSide, at: 0.62, scale: 0.13, tilt: 6)
+                let words = Self.actionWords(for: instruction, layoutSeed: layoutSeed)
+                for (index, word) in words.enumerated() {
+                    var region = index == 1 ? otherSide : widerSide
+                    if words.count == 3, index != 1 {
+                        region.size.height /= 2
+                        if index == 2 { region.origin.y += region.height }
+                    }
+                    let positions: [CGFloat] = words.count == 3 ? [0.48, 0.48, 0.52] : [0.35, 0.55]
+                    let scales: [CGFloat] = [0.15, 0.15, 0.12]
+                    draw(word, in: region, at: positions[index], scale: scales[index], tilt: index == 1 ? 6 : -6)
                 }
                 if let secondary = messages.dropFirst().first {
-                    draw(secondary, in: below, at: 0.76, scale: 0.07, tilt: 0)
+                    drawSecondary(secondary)
                 }
                 draw(words.last ?? instruction, in: widerSide, at: 0.83, scale: 0.06, tilt: 8, opacity: 0.54)
+            }
+
+            let decoration = nextFraction()
+            if decoration < 0.10 {
+                let phrase = Self.easterEggs[Int(nextFraction() * CGFloat(Self.easterEggs.count))]
+                for (index, word) in phrase.enumerated() {
+                    let region = index.isMultiple(of: 2) ? widerSide : otherSide
+                    draw(word, in: region, at: index < 2 ? 0.12 : 0.90, scale: 0.04, tilt: -4, opacity: 0.34)
+                }
+            } else if decoration < 0.68 {
+                let words = decoration < 0.40 ? Self.soundEffects : Self.asides
+                let word = words[Int(nextFraction() * CGFloat(words.count))]
+                draw(word, in: otherSide, at: 0.88, scale: 0.045, tilt: 7, opacity: 0.38)
             }
         }
     }
