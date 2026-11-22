@@ -66,6 +66,7 @@ final class DiagnosticModel: ObservableObject {
     }
     var onReminderEvent: ((ReminderEvent) -> Void)?
     @Published private(set) var previewReminderMessages: [String] = []
+    private(set) var previewReminderLayoutSeed: UInt64 = 0
     var onReminderAlertsChanged: ((BubbleSnapshot) -> Void)?
     var onSettingsChanged: ((MonitorSettings, MonitorSettings) -> Void)?
     var onWindowClosed: (() -> Void)?
@@ -542,6 +543,9 @@ final class DiagnosticModel: ObservableObject {
             }
         }
         let messages = alerts.filter { !$0.recovering }.map(\.message)
+        if messages.contains(where: { !previewReminderMessages.contains($0) }) {
+            previewReminderLayoutSeed = UInt64.random(in: .min ... .max)
+        }
         if previewReminderMessages != messages { previewReminderMessages = messages }
         var ongoingIDs: Set<String> = []
         let enabled = hasStarted && settings.automaticReminders && collector == nil && !oralSamples.isRecording

@@ -224,7 +224,7 @@ private struct MonitorVideoPane: View {
             if let observation = model.frame?.observation, observation.faceCount == 1,
                let face = observation.faceBox, !model.previewReminderMessages.isEmpty {
                 PreviewReminderEffect(observation: observation, face: face, mirrored: mirrored,
-                                      messages: model.previewReminderMessages)
+                                      messages: model.previewReminderMessages, layoutSeed: model.previewReminderLayoutSeed)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -258,6 +258,7 @@ struct PreviewReminderEffect: View {
     let face: FaceBox
     let mirrored: Bool
     let messages: [String]
+    let layoutSeed: UInt64
 
     var body: some View {
         Canvas { context, size in
@@ -278,8 +279,18 @@ struct PreviewReminderEffect: View {
             let right = CGRect(x: face.maxX, y: image.minY, width: image.maxX - face.maxX, height: image.height)
             let below = CGRect(x: image.minX, y: face.maxY, width: image.width, height: image.maxY - face.maxY)
             var occupied: [CGRect] = []
+            var randomState = layoutSeed
 
-            func draw(_ word: String, in region: CGRect, at fraction: CGFloat, scale: CGFloat, tilt: Double, opacity: Double = 1) {
+            // Replay the same placements on every camera frame for this reminder.
+            func nextFraction() -> CGFloat {
+                randomState = randomState &* 6364136223846793005 &+ 1442695040888963407
+                return CGFloat(randomState >> 40) / 16_777_216
+            }
+
+            func draw(_ word: String, in region: CGRect, at fraction: CGFloat, scale: CGFloat, tilt baseTilt: Double, opacity: Double = 1) {
+                let horizontalPosition = 0.15 + nextFraction() * 0.70
+                let verticalPosition = fraction + (nextFraction() - 0.5) * 0.30
+                let tilt = baseTilt + Double(nextFraction() - 0.5) * 12
                 guard region.width > 28, region.height > 28 else { return }
                 var fontSize = min(180, image.width * scale, region.height * 0.37)
                 while fontSize >= 18 {
@@ -293,8 +304,8 @@ struct PreviewReminderEffect: View {
                     let width = measured.width + padding
                     let height = measured.height + padding
                     if width <= region.width, height <= region.height {
-                        let center = CGPoint(x: region.midX,
-                            y: min(region.maxY - height / 2, max(region.minY + height / 2, region.minY + region.height * fraction)))
+                        let center = CGPoint(x: region.minX + width / 2 + (region.width - width) * horizontalPosition,
+                            y: min(region.maxY - height / 2, max(region.minY + height / 2, region.minY + region.height * verticalPosition)))
                         let rect = CGRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height)
                         if !occupied.contains(where: { $0.intersects(rect) }) {
                             var ink = context

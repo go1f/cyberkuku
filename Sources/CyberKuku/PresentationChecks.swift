@@ -64,13 +64,19 @@ import PostureCore
                 precondition(PreviewReminderEffect.comicFontRegistered, "Missing bundled comic font")
                 let demo = DemoFrame.packet(scenario: .headTilt, timestamp: 1)
                 if let face = demo.observation.faceBox, let image = demo.image {
-                    for mirrored in [false, true] {
+                    var firstLayout: Data?
+                    for (mirrored, seed, name) in [
+                        (false, UInt64(17), "reminder-type.png"),
+                        (false, UInt64(91), "reminder-type-alternate.png"),
+                        (false, UInt64(17), "reminder-type-repeated.png"),
+                        (true, UInt64(17), "reminder-type-mirrored.png")
+                    ] {
                         let review = ZStack {
                             Color.black
                             Image(decorative: image, scale: 1).resizable().scaledToFit()
                                 .scaleEffect(x: mirrored ? -1 : 1)
                             PreviewReminderEffect(observation: demo.observation, face: face, mirrored: mirrored,
-                                                  messages: ["头向右扶正", "双肩放平"])
+                                                  messages: ["头向右扶正", "双肩放平"], layoutSeed: seed)
                         }.frame(width: 880, height: 495)
                         let renderer = ImageRenderer(content: review)
                         guard let data = renderer.nsImage?.tiffRepresentation,
@@ -78,7 +84,12 @@ import PostureCore
                               let png = bitmap.representation(using: .png, properties: [:]) else {
                             throw CocoaError(.fileWriteUnknown)
                         }
-                        let name = mirrored ? "reminder-type-mirrored.png" : "reminder-type.png"
+                        if name == "reminder-type.png" { firstLayout = png }
+                        if name == "reminder-type-alternate.png" { precondition(png != firstLayout) }
+                        if name == "reminder-type-repeated.png" {
+                            precondition(png == firstLayout)
+                            continue
+                        }
                         try png.write(to: folder.appendingPathComponent(name))
                     }
                 }
